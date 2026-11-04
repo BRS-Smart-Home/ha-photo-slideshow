@@ -35,9 +35,10 @@ DEFAULT_OPTIONS: dict = {
     OPT_MAX_PHOTO_PX: 1024,
     OPT_MAX_VIDEO_SECONDS: 30,
     OPT_MAX_VIDEO_MB: 60,
-    # folder rules apply to folder names: glob if they contain * ? [ ], else a whole-word match
-    OPT_INCLUDE_FOLDERS: ["[12][09][0-9][0-9] *", "01 me", "02 Family"],
-    OPT_EXCLUDE_FOLDERS: ["00 Resources", "03 Intros", "temp", "tmp", "Motion Graphics Template Media"],
+    # Folder rules apply to folder names: a glob if they contain * ? [ ], else a whole-word match.
+    # The include list is matched against the TOP-level folders below the root ("*" = all of them).
+    OPT_INCLUDE_FOLDERS: ["*"],
+    OPT_EXCLUDE_FOLDERS: ["temp", "tmp"],
     OPT_EXCLUDE_FILES: ["*_hide.*"],
     OPT_PHOTO_FORMATS: ["jpg", "jpeg", "png", "heic", "tif", "tiff", "bmp", "gif"],
     OPT_VIDEO_FORMATS: ["mp4", "mov"],

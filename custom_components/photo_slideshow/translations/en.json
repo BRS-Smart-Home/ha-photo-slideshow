@@ -1,0 +1,90 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Travel Slideshow",
+        "description": "Read-only access to a Google Drive photo folder through a service account. Share the folder with the service account's e-mail address as Viewer first, then paste the key file here.",
+        "data": {
+          "service_account": "Service account key (the whole JSON file)",
+          "root_folder_id": "Drive folder ID (or the folder's web address)",
+          "output_dir": "Folder for the slideshow files"
+        },
+        "data_description": {
+          "service_account": "Open the downloaded .json file in a text editor, select everything and paste it here. It is stored in this Home Assistant only.",
+          "root_folder_id": "The part after /folders/ in the folder's address.",
+          "output_dir": "Where the daily photos are written (used from version 0.2 on)."
+        }
+      }
+    },
+    "error": {
+      "invalid_json": "This is not valid JSON. Paste the entire contents of the key file.",
+      "invalid_key": "This is not a service account key (it needs type, client_email and private_key).",
+      "invalid_folder_id": "This does not look like a Drive folder ID.",
+      "auth_failed": "Google refused the key. Check that it is the key of the right service account and has not been deleted.",
+      "folder_not_found": "The folder was not found. Share it with the service account's e-mail address (Viewer) and check the ID.",
+      "not_a_folder": "This ID is a file, not a folder.",
+      "cannot_connect": "Cannot reach Google Drive. Try again."
+    },
+    "abort": {
+      "already_configured": "This folder is already set up."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Travel Slideshow options",
+        "description": "Folder and file rules take one entry per line. Plain words match whole words (\"temp\" does not match \"Temple\"); entries with * ? [ ] are glob patterns. Changes apply from the next scan or sync.",
+        "data": {
+          "photos_per_day": "Photos per day",
+          "videos_per_day": "Videos per day",
+          "max_photo_px": "Longest side of a photo",
+          "max_video_seconds": "Longest video",
+          "max_video_mb": "Largest video file",
+          "include_folders": "Top-level folders to include",
+          "exclude_folders": "Folders to exclude (any level)",
+          "exclude_files": "File-name patterns to exclude",
+          "photo_formats": "Photo formats",
+          "video_formats": "Video formats",
+          "sync_time": "Daily sync time",
+          "scan_weekday": "Weekly scan: day",
+          "scan_time": "Weekly scan: time",
+          "report_time": "Daily report time",
+          "report_notify": "Report: notify services (one per line)",
+          "new_boost_days": "New items get a boost for (days)",
+          "new_boost_weight": "Boost factor for new items",
+          "fails_before_push": "Push after this many failed syncs in a row"
+        },
+        "data_description": {
+          "include_folders": "Matched against the first folder below the root. \"*\" includes everything.",
+          "exclude_files": "Example: *_hide.* excludes IMG_1_hide.jpg. Rename a photo like that in Drive to remove it from the slideshow for good.",
+          "report_notify": "For example notify.mobile_app_phone. Leave empty to send no report."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "library_photos": { "name": "Photos in library" },
+      "library_videos": { "name": "Videos in library" },
+      "files_seen": { "name": "Files seen in Drive" },
+      "excluded": { "name": "Excluded by rules" },
+      "new_last_scan": { "name": "New in last scan" },
+      "hidden": { "name": "Hidden items" },
+      "last_scan": { "name": "Last scan" },
+      "cycle_photo": { "name": "Photo cycle progress" },
+      "cycle_video": { "name": "Video cycle progress" }
+    },
+    "binary_sensor": {
+      "scan_problem": { "name": "Scan problem" }
+    },
+    "button": {
+      "scan_now": { "name": "Scan library now" }
+    }
+  },
+  "issues": {
+    "drive_access": {
+      "title": "Travel Slideshow cannot read Google Drive",
+      "description": "The last scan failed: {error}\n\nCheck that the folder is still shared with the service account (Viewer) and that its key has not been deleted."
+    }
+  }
+}

@@ -10,7 +10,11 @@ try:
 except ImportError:                                           # the in-browser runner flattens the package
     from photo_slideshow import const, library, manifest_out, report, rules, state, title
 
-CFG = dict(const.DEFAULT_OPTIONS)
+CFG = dict(
+    const.DEFAULT_OPTIONS,
+    include_folders=["[12][09][0-9][0-9] *", "Me", "Family"],        # a travel library: "2022 Spain", plus two extra folders
+    exclude_folders=["Resources", "Intros", "temp", "tmp", "Motion Graphics Template Media"],
+)
 NOW = datetime(2026, 11, 4, 12, 0, 0)
 MB = 1024 * 1024
 
@@ -41,17 +45,17 @@ def test_supported_extra_formats():
 
 
 def test_top_level_folders():
-    assert ev(["01 me", "a.jpg"]).included
-    assert ev(["02 Family", "b.png"]).included
+    assert ev(["Me", "a.jpg"]).included
+    assert ev(["Family", "b.png"]).included
     assert ev(["1999 France", "c.jpg"]).included
     assert ev(["2000 Germany", "Bielefeld", "d.jpg"]).included
-    for top in ("00 Resources", "03 Intros", "aaaa temp", "2100 Future", "1850 Old", "Misc"):
+    for top in ("Resources", "Intros", "aaaa temp", "2100 Future", "1850 Old", "Misc"):
         d = ev([top, "a.jpg"])
         assert not d.included and d.reason == "not-included", (top, d)
 
 
 def test_root_files_are_never_shown():
-    d = ev(["Passport.jpg"])
+    d = ev(["Photo.jpg"])
     assert not d.included and d.reason == "root-file"
 
 
@@ -99,7 +103,7 @@ def test_dry_run_counts():
     rows = [
         (["2022 Spain", "a.jpg"], None, None),
         (["2022 Spain", "b.jpg"], None, None),
-        (["00 Resources", "c.jpg"], None, None),
+        (["Resources", "c.jpg"], None, None),
         (["2022 Spain", "d.dng"], None, None),
         (["2022 Spain", "e_hide.jpg"], None, None),
     ]
@@ -117,7 +121,7 @@ def test_suggest_hidden_name():
 def test_folder_glob_in_include_list():
     assert rules.match_glob("[12][09][0-9][0-9] *", "2022 Spain")
     assert not rules.match_glob("[12][09][0-9][0-9] *", "2022")
-    assert rules.match_segment("00 Resources", "00 resources")
+    assert rules.match_segment("Resources", "00 resources")
     assert not rules.match_segment("", "anything")
 
 
@@ -133,7 +137,7 @@ def test_title_without_subfolder_keeps_top_secret():
 
 
 def test_title_without_year():
-    assert title.title_from_path(["01 me", "Passport", "x.jpg"]).lines == ["Location: 01 me, Passport"]
+    assert title.title_from_path(["Me", "Album", "x.jpg"]).lines == ["Location: Me, Album"]
 
 
 def test_title_uses_first_subfolder_only():
@@ -310,7 +314,7 @@ def test_report_content():
 # ----------------------------------------------------------------------------- manifest
 def test_local_name_matches_old_script():
     assert manifest_out.local_name(3, ["2022 Spain", "Montserrat", "IMG_1.heic"], "jpg") == "3_2022_Spain_AAA_Montserrat_AAA_IMG_1.jpg"
-    assert manifest_out.local_name(10, ["01 me", "a b.png"], "png") == "10_01_me_AAA_a_b.png"
+    assert manifest_out.local_name(10, ["Me", "a b.png"], "png") == "10_Me_AAA_a_b.png"
 
 
 def test_manifest_has_titles_and_legacy_list():
