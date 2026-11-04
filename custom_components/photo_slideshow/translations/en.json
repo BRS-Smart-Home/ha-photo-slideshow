@@ -12,7 +12,7 @@
         "data_description": {
           "service_account": "Open the downloaded .json file in a text editor, select everything and paste it here. It is stored in this Home Assistant only.",
           "root_folder_id": "The part after /folders/ in the folder's address.",
-          "output_dir": "Where the daily photos are written (used from version 0.2 on)."
+          "output_dir": "Where the daily photos are written."
         }
       },
       "reconfigure": {
@@ -79,20 +79,28 @@
       "shown_photo": { "name": "Photos shown this cycle" },
       "shown_video": { "name": "Videos shown this cycle" },
       "last_scan": { "name": "Last scan" },
+      "last_sync": { "name": "Last sync" },
+      "today": { "name": "Items in today's slideshow" },
       "cycle_photo": { "name": "Photo cycle progress" },
       "cycle_video": { "name": "Video cycle progress" }
     },
     "binary_sensor": {
-      "scan_problem": { "name": "Scan problem" }
+      "scan_problem": { "name": "Scan problem" },
+      "sync_problem": { "name": "Sync problem" }
     },
     "button": {
-      "scan_now": { "name": "Scan library now" }
+      "scan_now": { "name": "Scan library now" },
+      "sync_now": { "name": "Sync slideshow now" }
     }
   },
   "issues": {
     "drive_access": {
       "title": "Travel Slideshow cannot read Google Drive",
       "description": "The last scan failed: {error}\n\nCheck that the folder is still shared with the service account (Viewer) and that its key has not been deleted."
+    },
+    "sync_failed": {
+      "title": "Travel Slideshow could not build today's slideshow",
+      "description": "The last sync failed: {error}\n\nYesterday's slideshow stays in place. It is retried at the next daily sync, or press \"Sync slideshow now\"."
     }
   }
 }

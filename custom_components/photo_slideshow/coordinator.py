@@ -4,9 +4,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import shutil
 import time
 from collections import Counter
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -20,8 +22,10 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from . import library as lib_mod
-from . import rules
+from . import media, rules
+from . import sync as sync_mod
 from .const import (
+    CONF_OUTPUT_DIR,
     CONF_ROOT_FOLDER_ID,
     CONF_SERVICE_ACCOUNT,
     DEFAULT_OPTIONS,
@@ -31,18 +35,28 @@ from .const import (
     KIND_VIDEO,
     OPT_EXCLUDE_FILES,
     OPT_EXCLUDE_FOLDERS,
+    OPT_FAILS_BEFORE_PUSH,
+    OPT_MAX_VIDEO_MB,
+    OPT_MAX_VIDEO_SECONDS,
+    OPT_PHOTOS_PER_DAY,
+    OPT_REPORT_NOTIFY,
     OPT_SCAN_TIME,
     OPT_SCAN_WEEKDAY,
+    OPT_SYNC_TIME,
+    OPT_VIDEOS_PER_DAY,
+    SAFETY_MAX_PHOTO_PX,
     STORAGE_KEY,
     STORAGE_VERSION,
 )
 from .drive import DriveAuthError, DriveClient, DriveError
 from .library import Item
+from .manifest_out import build_legacy_manifest, build_manifest, local_name
 from .state import State
 
 _LOGGER = logging.getLogger(__name__)
 
 ISSUE_DRIVE = "drive_access"
+ISSUE_SYNC = "sync_failed"
 
 
 def hm(value: str) -> tuple[int, int]:
@@ -95,12 +109,20 @@ class SlideshowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def async_start(self) -> None:
         h, m = hm(self.cfg[OPT_SCAN_TIME])
         self._unsubs.append(async_track_time_change(self.hass, self._weekly_scan, hour=h, minute=m, second=0))
+        sh, sm = hm(self.cfg[OPT_SYNC_TIME])
+        self._unsubs.append(async_track_time_change(self.hass, self._daily_sync, hour=sh, minute=sm, second=0))
         if not self.library:                                  # first run: scan right away, in the background
             self.entry.async_create_background_task(self.hass, self.async_scan(), "photo_slideshow_first_scan")
 
     async def _weekly_scan(self, now: datetime) -> None:
         if dt_util.as_local(now).weekday() == int(self.cfg[OPT_SCAN_WEEKDAY]):
             await self.async_scan()
+
+    async def _daily_sync(self, now: datetime) -> None:
+        try:
+            await self.async_sync()
+        except HomeAssistantError as err:                    # already logged and reported by async_sync
+            _LOGGER.warning("Daily sync did not run: %s", err)
 
     async def async_shutdown(self) -> None:
         for unsub in self._unsubs:
@@ -167,6 +189,113 @@ class SlideshowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._save()
         self.async_set_updated_data(self.snapshot())
 
+    # ---- the daily sync --------------------------------------------------------------------------------
+    @staticmethod
+    def _prepare_dir(path: Path) -> None:
+        shutil.rmtree(path, ignore_errors=True)
+        path.mkdir(parents=True)
+
+    @staticmethod
+    def _write_manifests(stage: Path, files: list) -> None:
+        (stage / "manifest.json").write_text(json.dumps(build_manifest(files), ensure_ascii=False, indent=1), encoding="utf-8")
+        (stage / "manifest.txt").write_text(build_legacy_manifest(files), encoding="utf-8")
+
+    @staticmethod
+    def _swap_dirs(stage: Path, out: Path) -> None:
+        """Publish the new folder: the old one is moved away and removed only after the new one is in place."""
+        old = out.with_name(f".{out.name}_old")
+        shutil.rmtree(old, ignore_errors=True)
+        if out.exists():
+            out.rename(old)
+        stage.rename(out)
+        shutil.rmtree(old, ignore_errors=True)
+
+    async def async_sync(self) -> dict:
+        """Build today's slideshow in the output folder. Failed items are replaced; 'used' is recorded only on success."""
+        if self._lock.locked():
+            raise HomeAssistantError("A scan or sync is already running")
+        async with self._lock:
+            started = time.monotonic()
+            now = _utcnow()
+            cfg = self.cfg
+            out = Path(self.entry.data[CONF_OUTPUT_DIR])
+            stage = out.with_name(f".{out.name}_new")
+            targets = {KIND_PHOTO: int(cfg[OPT_PHOTOS_PER_DAY]), KIND_VIDEO: int(cfg[OPT_VIDEOS_PER_DAY])}
+            try:
+                if not self.library:
+                    raise DriveError("The library is empty; run a scan first")
+                await self.hass.async_add_executor_job(self._prepare_dir, stage)
+
+                async def fetch(item: Item, counter: int) -> str:
+                    ext = rules.ext_of(item.name)
+                    tmp = stage / f".download_{counter}"
+                    try:
+                        if item.kind == KIND_PHOTO:
+                            fname = local_name(counter, item.parts, sync_mod.photo_target_ext(ext))
+                            await self.drive.download_to(item.id, tmp, max_bytes=500 * 1024 * 1024)
+                            await self.hass.async_add_executor_job(media.convert_photo, tmp, stage / fname, SAFETY_MAX_PHOTO_PX)
+                        else:
+                            fname = local_name(counter, item.parts, "mp4")
+                            await self.drive.download_to(item.id, tmp, max_bytes=2000 * 1024 * 1024)
+                            await media.convert_video(tmp, stage / fname, int(cfg[OPT_MAX_VIDEO_SECONDS]), int(cfg[OPT_MAX_VIDEO_MB]))
+                        return fname
+                    finally:
+                        await self.hass.async_add_executor_job(lambda: tmp.unlink(missing_ok=True))
+
+                res = await sync_mod.build_day(self.library, self.state.used, self.state.hidden_ids(), targets, fetch)
+                ok, why = sync_mod.day_is_acceptable(res, targets)
+                if not ok:
+                    raise DriveError(why)
+                await self.hass.async_add_executor_job(self._write_manifests, stage, res.done)
+                await self.hass.async_add_executor_job(self._swap_dirs, stage, out)
+            except (DriveError, OSError, RuntimeError) as err:
+                await self.hass.async_add_executor_job(lambda: shutil.rmtree(stage, ignore_errors=True))
+                await self._sync_failed(err, now)
+                raise HomeAssistantError(f"Sync failed: {err}") from err
+
+            for kind, ids, reset in sync_mod.used_ids_to_record(res):
+                self.state.mark_used(kind, ids, cycle_reset=reset)
+            self.state.totals["shown"] = self.state.totals.get("shown", 0) + len(res.done)
+            self.state.today = [it.id for it, _ in res.done]
+            self.state.fails_in_row = 0
+            self.state.last_sync = {
+                "ok": True, "at": now.isoformat(), "seconds": round(time.monotonic() - started, 1),
+                "photos": len(res.ids[KIND_PHOTO]), "videos": len(res.ids[KIND_VIDEO]),
+                "short_photos": res.short[KIND_PHOTO], "short_videos": res.short[KIND_VIDEO],
+                "failed": res.failed[:20], "failed_count": len(res.failed), "error": None,
+            }
+            ir.async_delete_issue(self.hass, DOMAIN, ISSUE_SYNC)
+            _LOGGER.info("Sync finished: %s photos, %s videos, %s items failed and were replaced",
+                         len(res.ids[KIND_PHOTO]), len(res.ids[KIND_VIDEO]), len(res.failed))
+            self._save()
+            self.async_set_updated_data(self.snapshot())
+            return self.state.last_sync
+
+    async def _sync_failed(self, err: Exception, now: datetime) -> None:
+        _LOGGER.error("Sync failed: %s", err)
+        self.state.fails_in_row += 1
+        self.state.last_sync = {**self.state.last_sync, "ok": False, "at": now.isoformat(), "error": str(err)}
+        ir.async_create_issue(
+            self.hass, DOMAIN, ISSUE_SYNC, is_fixable=False, severity=ir.IssueSeverity.ERROR,
+            translation_key=ISSUE_SYNC, translation_placeholders={"error": str(err)},
+        )
+        self.hass.bus.async_fire(EVENT_SYNC_FAILED, {"stage": "sync", "error": str(err), "in_a_row": self.state.fails_in_row})
+        if self.state.fails_in_row >= int(self.cfg[OPT_FAILS_BEFORE_PUSH]):
+            await self._push(f"Travel Slideshow: {self.state.fails_in_row} syncs failed in a row. Last error: {err}")
+        self._save()
+        self.async_set_updated_data(self.snapshot())
+
+    async def _push(self, message: str) -> None:
+        """Send to the configured notify services (entries that are plain e-mail addresses belong to the report, not here)."""
+        for target in self.cfg[OPT_REPORT_NOTIFY]:
+            if not str(target).startswith("notify."):
+                continue
+            domain, service = str(target).split(".", 1)
+            try:
+                await self.hass.services.async_call(domain, service, {"title": "Travel Slideshow", "message": message}, blocking=True)
+            except Exception as err:  # noqa: BLE001 - a broken notifier must not break the sync bookkeeping
+                _LOGGER.warning("Could not send the push through %s: %s", target, err)
+
     # ---- dry run -------------------------------------------------------------------------------------
     def dry_run(self, overrides: dict | None = None) -> dict:
         """Count what the rules (current, or with overrides) keep or remove, from the last listing. Nothing is changed."""
@@ -186,6 +315,9 @@ class SlideshowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "new": ls.get("new"), "hidden": len(self.state.hidden),
             "last_scan_at": ls.get("at"), "last_scan_ok": ls.get("ok"), "last_scan_error": ls.get("error"),
             "last_scan": ls,
+            "last_sync": self.state.last_sync or {}, "last_sync_ok": (self.state.last_sync or {}).get("ok"),
+            "last_sync_at": (self.state.last_sync or {}).get("at"), "last_sync_error": (self.state.last_sync or {}).get("error"),
+            "today": len(self.state.today), "fails_in_row": self.state.fails_in_row,
             "likes": self.state.totals.get("like", 0), "likes_pending": len(self.state.pending["like"]),
             "fixes": self.state.totals.get("fix", 0), "fixes_pending": len(self.state.pending["fix"]),
             "hidden_pending": len(self.state.pending["hide"]),

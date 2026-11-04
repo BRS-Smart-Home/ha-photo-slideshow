@@ -14,7 +14,7 @@ STALE_AFTER = timedelta(days=10)          # a weekly scan is overdue after 10 da
 
 
 async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities: AddEntitiesCallback) -> None:
-    async_add_entities([ScanProblem(entry.runtime_data)])
+    async_add_entities([ScanProblem(entry.runtime_data), SyncProblem(entry.runtime_data)])
 
 
 class ScanProblem(SlideshowEntity, BinarySensorEntity):
@@ -37,3 +37,19 @@ class ScanProblem(SlideshowEntity, BinarySensorEntity):
     def extra_state_attributes(self):
         err = self.coordinator.data.get("last_scan_error")
         return {"error": err} if err else None
+
+
+class SyncProblem(SlideshowEntity, BinarySensorEntity):
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+
+    def __init__(self, coordinator) -> None:
+        super().__init__(coordinator, "sync_problem")
+
+    @property
+    def is_on(self) -> bool:
+        return self.coordinator.data.get("last_sync_ok") is False
+
+    @property
+    def extra_state_attributes(self):
+        d = self.coordinator.data
+        return {"error": d.get("last_sync_error"), "failed_in_a_row": d.get("fails_in_row")} if self.is_on else None

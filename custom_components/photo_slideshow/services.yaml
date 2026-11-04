@@ -2,6 +2,10 @@ scan:
   name: Scan library
   description: Rescan the Google Drive folder now and update the library. Returns the scan statistics.
 
+sync:
+  name: Sync now
+  description: Build the slideshow folder now (the same job that runs daily). Returns the result.
+
 dry_run:
   name: Dry run of the library rules
   description: >-

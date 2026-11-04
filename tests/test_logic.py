@@ -6,9 +6,9 @@ import random
 from datetime import datetime, timedelta
 
 try:
-    from custom_components.photo_slideshow import const, library, manifest_out, report, rules, state, title
+    from custom_components.photo_slideshow import const, library, manifest_out, report, rules, state, sync, title
 except ImportError:                                           # the in-browser runner flattens the package
-    from photo_slideshow import const, library, manifest_out, report, rules, state, title
+    from photo_slideshow import const, library, manifest_out, report, rules, state, sync, title
 
 CFG = dict(
     const.DEFAULT_OPTIONS,
@@ -343,3 +343,99 @@ def run_all():
                 failed += 1
                 lines.append(f"FAIL {name}: {type(e).__name__}: {e}")
     return passed, failed, lines
+
+
+# ----------------------------------------------------------------------------- the daily sync
+def run(coro):
+    """Drive a coroutine that never really suspends (the fakes below do not)."""
+    try:
+        coro.send(None)
+    except StopIteration as stop:
+        return stop.value
+    raise RuntimeError("coroutine suspended")
+
+
+def lib_of(n_photos, n_videos=0):
+    lib = {}
+    for i in range(n_photos):
+        lib[f"p{i}"] = library.Item(f"p{i}", ("2022 Spain", f"IMG_{i}.jpg"), "photo", NOW)
+    for i in range(n_videos):
+        lib[f"v{i}"] = library.Item(f"v{i}", ("2022 Spain", f"MOV_{i}.mp4"), "video", NOW)
+    return lib
+
+
+def empty_used():
+    return {"photo": set(), "video": set()}
+
+
+def test_build_day_gets_the_wanted_numbers():
+    async def fetch(item, n):
+        return f"{n}_{item.id}.jpg"
+    res = run(sync.build_day(lib_of(60, 5), empty_used(), set(), {"photo": 47, "video": 3}, fetch, random.Random(1)))
+    assert len(res.ids["photo"]) == 47 and len(res.ids["video"]) == 3 and not res.failed
+    assert [e[0].kind for e in res.done] == ["photo"] * 47 + ["video"] * 3
+    assert len({e[1] for e in res.done}) == 50                      # all file names differ
+
+
+def test_failed_items_are_replaced():
+    bad = {"p0", "p1", "p2"}
+
+    async def fetch(item, n):
+        if item.id in bad:
+            raise RuntimeError("broken file")
+        return f"{n}.jpg"
+    res = run(sync.build_day(lib_of(20), empty_used(), set(), {"photo": 10, "video": 0}, fetch, random.Random(2)))
+    assert len(res.ids["photo"]) == 10 and not (set(res.ids["photo"]) & bad)
+    assert all(f["error"].startswith("RuntimeError") for f in res.failed)
+
+
+def test_hidden_and_used_are_never_picked():
+    async def fetch(item, n):
+        return f"{n}.jpg"
+    used = {"photo": {f"p{i}" for i in range(10)}, "video": set()}
+    hidden = {f"p{i}" for i in range(10, 20)}
+    res = run(sync.build_day(lib_of(30), used, hidden, {"photo": 10, "video": 0}, fetch, random.Random(3)))
+    assert set(res.ids["photo"]) == {f"p{i}" for i in range(20, 30)} and not res.cycle_reset["photo"]
+
+
+def test_cycle_restarts_when_unused_run_out():
+    async def fetch(item, n):
+        return f"{n}.jpg"
+    used = {"photo": {f"p{i}" for i in range(8)}, "video": set()}
+    res = run(sync.build_day(lib_of(10), used, set(), {"photo": 5, "video": 0}, fetch, random.Random(4)))
+    assert len(res.ids["photo"]) == 5 and res.cycle_reset["photo"]
+    assert {"p8", "p9"} <= set(res.ids["photo"])                    # what was left comes first
+
+
+def test_gives_up_when_everything_fails():
+    async def fetch(item, n):
+        raise OSError("disk full")
+    res = run(sync.build_day(lib_of(100), empty_used(), set(), {"photo": 10, "video": 0}, fetch, random.Random(5)))
+    assert not res.ids["photo"] and len(res.failed) == 30           # 3 x the wanted number, then stop
+    ok, why = sync.day_is_acceptable(res, {"photo": 10, "video": 0})
+    assert not ok and "0 of 10" in why
+
+
+def test_day_needs_half_of_the_photos_but_videos_are_optional():
+    async def fetch(item, n):
+        if item.kind == "video":
+            raise RuntimeError("no ffmpeg")
+        return f"{n}.jpg"
+    res = run(sync.build_day(lib_of(10, 3), empty_used(), set(), {"photo": 10, "video": 3}, fetch, random.Random(6)))
+    assert sync.day_is_acceptable(res, {"photo": 10, "video": 3})[0] and res.short["video"] == 3
+
+
+def test_local_copy_extensions():
+    assert [sync.photo_target_ext(e) for e in ("JPG", "jpeg", "png", "heic", "tif", "bmp", "gif")] == \
+        ["jpg", "jpeg", "png", "jpg", "jpg", "jpg", "jpg"]
+
+
+def test_used_is_recorded_only_through_the_state():
+    async def fetch(item, n):
+        return f"{n}.jpg"
+    res = run(sync.build_day(lib_of(6), empty_used(), set(), {"photo": 4, "video": 0}, fetch, random.Random(7)))
+    st = state.State()
+    assert not st.used["photo"]                                      # building a day does not touch the state
+    for kind, ids, reset in sync.used_ids_to_record(res):
+        st.mark_used(kind, ids, cycle_reset=reset)
+    assert len(st.used["photo"]) == 4

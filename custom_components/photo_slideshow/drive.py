@@ -142,6 +142,49 @@ class DriveClient:
     async def download(self, file_id: str, max_bytes: int | None = None) -> bytes:
         return await self._get(f"{API}/files/{file_id}", {"alt": "media"}, as_json=False, max_bytes=max_bytes)
 
+    async def download_to(self, file_id: str, dest, max_bytes: int | None = None) -> int:
+        """Stream a file to `dest` (a pathlib.Path) without holding it in memory. Returns the size written."""
+        loop = asyncio.get_running_loop()
+        last: Exception | None = None
+        for attempt in range(3):
+            token = await self._access_token()
+            try:
+                async with self._session.get(
+                    f"{API}/files/{file_id}", params={"alt": "media"}, headers={"Authorization": f"Bearer {token}"},
+                    timeout=aiohttp.ClientTimeout(total=900, sock_read=60),
+                ) as resp:
+                    if resp.status == 200:
+                        if max_bytes and resp.content_length and resp.content_length > max_bytes:
+                            raise DriveError(f"file larger than {max_bytes} bytes")
+                        written = 0
+                        fh = await loop.run_in_executor(None, open, dest, "wb")
+                        try:
+                            async for chunk in resp.content.iter_chunked(1 << 20):
+                                written += len(chunk)
+                                if max_bytes and written > max_bytes:
+                                    raise DriveError(f"file larger than {max_bytes} bytes")
+                                await loop.run_in_executor(None, fh.write, chunk)
+                        finally:
+                            await loop.run_in_executor(None, fh.close)
+                        return written
+                    body = (await resp.text())[:300]
+                    if resp.status == 401:
+                        self._token = None
+                        last = DriveAuthError("Google rejected the access token")
+                    elif resp.status == 404:
+                        raise DriveNotFound("Not found, or not shared with the service account")
+                    elif resp.status == 403 and "ateLimit" not in body:
+                        raise DriveAuthError(f"Access denied: {body}")
+                    elif resp.status in (403, 429, 500, 502, 503, 504):
+                        last = DriveError(f"HTTP {resp.status}")
+                        await asyncio.sleep(2 ** attempt)
+                    else:
+                        raise DriveError(f"HTTP {resp.status}: {body}")
+            except (aiohttp.ClientError, asyncio.TimeoutError) as err:
+                last = DriveError(f"Network problem: {err}")
+                await asyncio.sleep(2 ** attempt)
+        raise last or DriveError("retries exhausted")
+
     async def list_tree(self, root_id: str) -> list[DriveFile]:
         """Every non-folder file below `root_id`, with its path. Raises if any part of the listing fails (never partial)."""
         paths: dict[str, tuple[str, ...]] = {root_id: ()}

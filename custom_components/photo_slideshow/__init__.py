@@ -45,7 +45,11 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     hass.services.async_register(DOMAIN, SERVICE_DRY_RUN, handle_dry_run, schema=DRY_RUN_SCHEMA,
                                  supports_response=SupportsResponse.ONLY)
+    async def handle_sync(call: ServiceCall) -> ServiceResponse:
+        return await _coordinator(hass).async_sync()
+
     hass.services.async_register(DOMAIN, SERVICE_SCAN, handle_scan, supports_response=SupportsResponse.OPTIONAL)
+    hass.services.async_register(DOMAIN, SERVICE_SYNC, handle_sync, supports_response=SupportsResponse.OPTIONAL)
     return True
 
 
