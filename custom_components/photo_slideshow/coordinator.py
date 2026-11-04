@@ -119,11 +119,7 @@ class SlideshowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._unsubs.append(async_track_time_change(self.hass, self._weekly_scan, hour=h, minute=m, second=0))
         sh, sm = hm(self.cfg[OPT_SYNC_TIME])
         self._unsubs.append(async_track_time_change(self.hass, self._daily_sync, hour=sh, minute=sm, second=0))
-        self.entry.async_create_background_task(
-            self.hass, self.hass.async_add_executor_job(
-                self._refresh_manifest, Path(self.entry.data[CONF_OUTPUT_DIR]), int(self.cfg[OPT_PHOTO_SECONDS]),
-                {i.id: taken_text(i.meta) for i in self.library.values() if i.kind == KIND_PHOTO}),
-            "photo_slideshow_manifest_refresh")
+        self.entry.async_create_background_task(self.hass, self._refresh_manifest_task(), "photo_slideshow_manifest_refresh")
         rh, rm = hm(self.cfg[OPT_REPORT_TIME])
         self._unsubs.append(async_track_time_change(self.hass, self._daily_report, hour=rh, minute=rm, second=0))
         if not self.library:                                  # first run: scan right away, in the background
@@ -132,6 +128,11 @@ class SlideshowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _weekly_scan(self, now: datetime) -> None:
         if dt_util.as_local(now).weekday() == int(self.cfg[OPT_SCAN_WEEKDAY]):
             await self.async_scan()
+
+    async def _refresh_manifest_task(self) -> None:
+        taken = {i.id: taken_text(i.meta) for i in self.library.values() if i.kind == KIND_PHOTO}
+        await self.hass.async_add_executor_job(
+            self._refresh_manifest, Path(self.entry.data[CONF_OUTPUT_DIR]), int(self.cfg[OPT_PHOTO_SECONDS]), taken)
 
     async def _daily_sync(self, now: datetime) -> None:
         try:
