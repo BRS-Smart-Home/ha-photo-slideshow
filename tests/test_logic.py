@@ -449,3 +449,10 @@ def test_manifest_carries_the_show_options_and_nav_keys_are_hidden_by_default():
     assert manifest_out.build_manifest([(it, "1_x.jpg")])["show"] == {}                 # no options: the page shows everything
     for k in const.SHOW_KEYS:
         assert const.DEFAULT_OPTIONS[const.show_option(k)] is (k not in ("prev", "pause", "next")), k
+
+
+def test_path_from_local_name_recovers_a_readable_drive_path():
+    assert manifest_out.path_from_local_name("3_2022_Spain_AAA_Montserrat_AAA_IMG_1.jpg") == "2022 Spain/Montserrat/IMG 1"
+    assert manifest_out.path_from_local_name("12_2021_Spain_AAA_Tenerife_AAA_Fills_AAA_x_AAA_112.png").startswith("2021 Spain/Tenerife/Fills/")
+    it = library.Item("a", ("2022 Spain", "x.heic"), "photo", NOW)
+    assert manifest_out.build_manifest([(it, "1_x.jpg")])["items"][0]["path"] == "2022 Spain/x.heic"

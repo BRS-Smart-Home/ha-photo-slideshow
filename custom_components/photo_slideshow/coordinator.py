@@ -58,7 +58,7 @@ from .const import (
 )
 from .drive import DriveAuthError, DriveClient, DriveError
 from .library import Item
-from .manifest_out import build_legacy_manifest, build_manifest, local_name
+from .manifest_out import build_legacy_manifest, build_manifest, local_name, path_from_local_name
 from .report import build_report
 from .state import State
 from .title import taken_text
@@ -370,15 +370,31 @@ class SlideshowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
         os.replace(tmp, path)
 
+    @staticmethod
+    def _manifest_entry(out: Path, item_id: str) -> dict | None:
+        try:
+            data = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        return next((e for e in data.get("items", []) if e.get("id") == item_id), None)
+
     async def async_mark(self, mark: str, item_id: str) -> dict:
         """Record a like / fix / never-show mark for a library item."""
         if mark not in MARKS:
             raise HomeAssistantError(f"Unknown mark {mark!r}")
+        out = Path(self.entry.data[CONF_OUTPUT_DIR])
         item = self.library.get(item_id)
         if item is None:
-            raise HomeAssistantError("This item is not in the library (any more)")
+            # Not in the library any more (e.g. a folder was excluded after today's slideshow was built), but it can still be
+            # on screen: take what we need from today's manifest so it can still be reported / hidden.
+            entry = await self.hass.async_add_executor_job(self._manifest_entry, out, item_id)
+            if entry is None:
+                raise HomeAssistantError("This item is neither in the library nor in today's slideshow")
+            path = entry.get("path") or path_from_local_name(entry.get("file", ""))
+            item = Item(id=item_id, parts=tuple(p for p in path.split("/") if p) or (entry.get("file", item_id),),
+                        kind=entry.get("kind", KIND_PHOTO), added=_utcnow())
         new = self.state.mark(mark, item, _utcnow())
-        await self.hass.async_add_executor_job(self._update_manifest, Path(self.entry.data[CONF_OUTPUT_DIR]), item_id, mark)
+        await self.hass.async_add_executor_job(self._update_manifest, out, item_id, mark)
         self._save()
         self.async_set_updated_data(self.snapshot())
         return {"mark": mark, "new": new, "path": item.path}

@@ -17,6 +17,15 @@ def local_name(counter: int, parts: Sequence[str], ext: str) -> str:
     return f"{counter}_{clean}.{ext}"
 
 
+def path_from_local_name(fname: str) -> str:
+    """Best-effort Drive path from a local file name (`3_2022_Spain_AAA_Montserrat_AAA_IMG_1.jpg`): for manifests written before
+    they carried the real path. Spaces in the original names come back as spaces, the file extension is not restored."""
+    stem = fname.rsplit(".", 1)[0] if "." in fname else fname
+    if "_" in stem and stem.split("_", 1)[0].isdigit():
+        stem = stem.split("_", 1)[1]
+    return "/".join(part.replace("_", " ") for part in stem.split("_AAA_"))
+
+
 def build_manifest(files: Sequence[tuple[Item, str]], photo_seconds: int = 15, show: Mapping | None = None) -> dict:
     """`files` = (item, local file name) for every item that was downloaded successfully today."""
     entries = []
@@ -24,7 +33,7 @@ def build_manifest(files: Sequence[tuple[Item, str]], photo_seconds: int = 15, s
         title = enrich(title_from_path(item.parts), item.meta)
         entries.append({
             "id": item.id, "file": fname, "kind": item.kind, "lines": title.lines,
-            "year": title.year, "country": title.country, "place": title.place, "taken": taken_text(item.meta),
+            "year": title.year, "country": title.country, "place": title.place, "taken": taken_text(item.meta), "path": item.path,
         })
     return {"version": 1, "photo_seconds": photo_seconds, "show": dict(show or {}), "count": len(entries), "items": entries}
 
