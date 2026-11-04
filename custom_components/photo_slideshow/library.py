@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Iterable, Mapping, Sequence
 
 
@@ -66,46 +66,31 @@ class PickResult:
     short: int = 0                            # how many of the requested items could not be found
 
 
-def _weighted_sample(candidates: Sequence[Item], k: int, rng: random.Random, weight) -> list[Item]:
-    """Weighted sampling without replacement (Efraimidis-Spirakis)."""
-    keyed = [(rng.random() ** (1.0 / max(weight(c), 1e-9)), c) for c in candidates]
-    keyed.sort(key=lambda t: t[0], reverse=True)
-    return [c for _, c in keyed[:k]]
-
-
 def pick(
     library: Mapping[str, Item],
     kind: str,
     k: int,
     used: set[str],
     hidden: set[str],
-    now: datetime,
     rng: random.Random | None = None,
-    boost_days: int = 7,
-    boost_weight: float = 5.0,
     exclude: Iterable[str] = (),
 ) -> PickResult:
-    """Pick `k` items of `kind` that were not shown in this cycle, are not hidden and are not in `exclude`.
+    """Pick `k` items of `kind` uniformly at random: not shown in this cycle, not hidden, not in `exclude`.
 
-    Items first seen in the last `boost_days` days get `boost_weight` times the chance. When fewer than `k` unused items are
-    left, they are all taken and the rest comes from the start of a new cycle (`cycle_reset=True`): the caller then clears
-    its used set before recording the picks.
+    Every eligible item has the same chance (new files get no preference). When fewer than `k` unused items are left, they are
+    all taken and the rest comes from the start of a new cycle (`cycle_reset=True`): the caller then clears its used set before
+    recording the picks.
     """
     rng = rng or random.Random()
     skip = set(exclude)
     pool = [i for i in library.values() if i.kind == kind and i.id not in hidden and i.id not in skip]
-    avail = [i for i in pool if i.id not in used]
-    cutoff = now - timedelta(days=boost_days)
-
-    def weight(i: Item) -> float:
-        return boost_weight if i.added >= cutoff else 1.0
-
     if k <= 0:
         return PickResult([])
+    avail = [i for i in pool if i.id not in used]
     if len(avail) >= k:
-        return PickResult(_weighted_sample(avail, k, rng, weight))
-    picked = list(avail)
+        return PickResult(rng.sample(avail, k))
+    picked = list(avail)                                     # take what is left, then start a new cycle
     taken = {p.id for p in picked}
     fresh = [i for i in pool if i.id not in taken]
-    picked += _weighted_sample(fresh, k - len(picked), rng, weight)
+    picked += rng.sample(fresh, min(k - len(picked), len(fresh)))
     return PickResult(picked, cycle_reset=True, short=k - len(picked))

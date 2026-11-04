@@ -12,7 +12,6 @@ from .const import (
     KIND_VIDEO,
     OPT_EXCLUDE_FILES,
     OPT_EXCLUDE_FOLDERS,
-    OPT_INCLUDE_FOLDERS,
     OPT_MAX_VIDEO_MB,
     OPT_MAX_VIDEO_SECONDS,
     OPT_PHOTO_FORMATS,
@@ -53,7 +52,7 @@ def ext_of(name: str) -> str:
 class Decision:
     included: bool
     kind: str | None
-    reason: str          # "ok" or why it is out: format, root-file, not-included, excluded-folder, excluded-name, video-*
+    reason: str          # "ok" or why it is out: format, root-file, excluded-folder, excluded-name, video-*
 
 
 def evaluate(
@@ -78,8 +77,6 @@ def evaluate(
         return Decision(False, None, "format")
     if not folders:
         return Decision(False, kind, "root-file")           # files directly in the root are never shown
-    if not any(match_glob(p, folders[0]) for p in cfg[OPT_INCLUDE_FOLDERS]):
-        return Decision(False, kind, "not-included")
     for seg in folders:
         if any(match_segment(p, seg) for p in cfg[OPT_EXCLUDE_FOLDERS]):
             return Decision(False, kind, "excluded-folder")

@@ -39,14 +39,12 @@
     "step": {
       "init": {
         "title": "Travel Slideshow options",
-        "description": "Folder and file rules take one entry per line. Plain words match whole words (\"temp\" does not match \"Temple\"); entries with * ? [ ] are glob patterns. Changes apply from the next scan or sync.",
+        "description": "Folder and file rules take one entry per line; formats are separated by commas. Photos are kept at their original size. Changes apply from the next scan or sync.",
         "data": {
           "photos_per_day": "Photos per day",
           "videos_per_day": "Videos per day",
-          "max_photo_px": "Longest side of a photo",
           "max_video_seconds": "Longest video",
           "max_video_mb": "Largest video file",
-          "include_folders": "Top-level folders to include",
           "exclude_folders": "Folders to exclude (any level)",
           "exclude_files": "File-name patterns to exclude",
           "photo_formats": "Photo formats",
@@ -56,12 +54,12 @@
           "scan_time": "Weekly scan: time",
           "report_time": "Daily report time",
           "report_notify": "Report: notify services (one per line)",
-          "new_boost_days": "New items get a boost for (days)",
-          "new_boost_weight": "Boost factor for new items",
           "fails_before_push": "Push after this many failed syncs in a row"
         },
         "data_description": {
-          "include_folders": "Matched against the first folder below the root. \"*\" includes everything.",
+          "exclude_folders": "Matched against every folder name on the way to a file. A plain word matches a whole word (\"temp\" matches \"aaaa temp\" but not \"Temple\"); entries with * ? [ ] are glob patterns.",
+          "photo_formats": "File extensions separated by commas, for example: jpg, jpeg, png, heic, tif, bmp, gif",
+          "video_formats": "File extensions separated by commas, for example: mp4, mov",
           "exclude_files": "Example: *_hide.* excludes IMG_1_hide.jpg. Rename a photo like that in Drive to remove it from the slideshow for good.",
           "report_notify": "For example notify.mobile_app_phone. Leave empty to send no report."
         }

@@ -8,12 +8,6 @@ dry_run:
     Count how many files of the last scan each rule keeps or removes, with the current options or with the rules given here.
     Nothing is changed.
   fields:
-    include_folders:
-      name: Included top-level folders
-      description: Folder names (glob patterns such as "[12][09][0-9][0-9] *").
-      example: '["[12][09][0-9][0-9] *", "Family"]'
-      selector:
-        object:
     exclude_folders:
       name: Excluded folders
       description: Folder names; plain words match whole words ("temp" does not match "Temple").

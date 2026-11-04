@@ -16,8 +16,8 @@
 
 | Version | What it does |
 |---|---|
-| **0.1.0** (this) | Connects to Google Drive with a **service account** (read-only), scans the photo folder, applies the folder / file / format rules and reports the numbers as sensors. No downloads yet, nothing in the slideshow changes. |
-| 0.2 | Nightly sync (photos resized, HEIC/TIFF/BMP converted, videos converted), manifest, marks (like / fix / never show), 08:00 report, buttons on the slideshow page, push on errors. |
+| **0.1.x** (this) | Connects to Google Drive with a **service account** (read-only), scans the photo folder, applies the folder / file / format rules and reports the numbers as sensors. No downloads yet, nothing in the slideshow changes. |
+| 0.2 | Nightly sync (photos kept at their original size, HEIC/TIFF/BMP/GIF converted to JPG, videos converted to a small MP4), manifest, marks (like / fix / never show), 08:00 report, buttons on the slideshow page, push on errors. |
 | 0.3 | Cut-over from the old `sync_photos.sh` script. |
 
 ## Install
@@ -40,11 +40,10 @@ All rules are options of the integration (**Configure**), one entry per line:
 
 | Option | Default | Notes |
 |---|---|---|
-| Top-level folders to include | `*` | glob patterns, e.g. `[12][09][0-9][0-9] *` for folders like `2022 Spain` |
-| Folders to exclude | `temp`, `tmp` | any level; plain words match whole words (`temp` does not match `Temple`) |
+| Folders to exclude | `temp`, `tmp` | any level; plain words match whole words (`temp` does not match `Temple`); entries with `* ? [ ]` are glob patterns |
 | File-name patterns to exclude | `*_hide.*` | rename `IMG_1.jpg` to `IMG_1_hide.jpg` in Drive and it leaves the slideshow for good |
-| Photo formats | jpg jpeg png heic tif tiff bmp gif | |
-| Video formats | mp4 mov | up to 30 s and 60 MB by default |
+| Photo formats | jpg, jpeg, png, heic, tif, tiff, bmp, gif | separated by commas; photos keep their original size |
+| Video formats | mp4, mov | up to 30 s and 60 MB by default |
 | Photos / videos per day | 47 / 3 | |
 | Weekly scan, daily sync, daily report | Sunday 03:00, 00:00, 08:00 | |
 

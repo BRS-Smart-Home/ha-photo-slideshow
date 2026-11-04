@@ -12,8 +12,7 @@ except ImportError:                                           # the in-browser r
 
 CFG = dict(
     const.DEFAULT_OPTIONS,
-    include_folders=["[12][09][0-9][0-9] *", "Me", "Family"],        # a travel library: "2022 Spain", plus two extra folders
-    exclude_folders=["Resources", "Intros", "temp", "tmp", "Motion Graphics Template Media"],
+    exclude_folders=["Resources", "Intros", "temp", "tmp", "Motion Graphics Template Media"],     # a travel library
 )
 NOW = datetime(2026, 11, 4, 12, 0, 0)
 MB = 1024 * 1024
@@ -45,13 +44,11 @@ def test_supported_extra_formats():
 
 
 def test_top_level_folders():
-    assert ev(["Me", "a.jpg"]).included
-    assert ev(["Family", "b.png"]).included
-    assert ev(["1999 France", "c.jpg"]).included
-    assert ev(["2000 Germany", "Bielefeld", "d.jpg"]).included
-    for top in ("Resources", "Intros", "aaaa temp", "2100 Future", "1850 Old", "Misc"):
+    for top in ("Me", "Family", "1999 France", "2000 Germany", "Misc", "2100 Future"):
+        assert ev([top, "a.jpg"]).included, top                  # every top-level folder is in unless excluded by name
+    for top in ("Resources", "Intros", "aaaa temp"):
         d = ev([top, "a.jpg"])
-        assert not d.included and d.reason == "not-included", (top, d)
+        assert not d.included and d.reason == "excluded-folder", (top, d)
 
 
 def test_root_files_are_never_shown():
@@ -108,7 +105,7 @@ def test_dry_run_counts():
         (["2022 Spain", "e_hide.jpg"], None, None),
     ]
     c = rules.dry_run(rows, CFG)
-    assert c["photo:ok"] == 2 and c["photo:not-included"] == 1 and c["other:format"] == 1 and c["photo:excluded-name"] == 1, c
+    assert c["photo:ok"] == 2 and c["photo:excluded-folder"] == 1 and c["other:format"] == 1 and c["photo:excluded-name"] == 1, c
 
 
 def test_suggest_hidden_name():
@@ -169,25 +166,25 @@ def test_pick_is_unique_filtered_and_kind_correct():
     lib = make_library()
     used = {f"p{i}" for i in range(20)}
     hidden = {f"p{i}" for i in range(20, 30)}
-    r = library.pick(lib, "photo", 47, used, hidden, NOW, random.Random(1))
+    r = library.pick(lib, "photo", 47, used, hidden, random.Random(1))
     ids = [i.id for i in r.items]
     assert len(ids) == 47 == len(set(ids)) and not r.cycle_reset and r.short == 0
     assert not (set(ids) & used) and not (set(ids) & hidden)
     assert all(i.kind == "photo" for i in r.items)
-    rv = library.pick(lib, "video", 3, set(), set(), NOW, random.Random(2))
+    rv = library.pick(lib, "video", 3, set(), set(), random.Random(2))
     assert len(rv.items) == 3 and all(i.kind == "video" for i in rv.items)
 
 
 def test_pick_exclude_for_replacements():
     lib = make_library(n_photos=10)
-    r = library.pick(lib, "photo", 5, set(), set(), NOW, random.Random(3), exclude={"p0", "p1", "p2"})
+    r = library.pick(lib, "photo", 5, set(), set(), random.Random(3), exclude={"p0", "p1", "p2"})
     assert not ({i.id for i in r.items} & {"p0", "p1", "p2"})
 
 
 def test_cycle_reset_when_pool_runs_out():
     lib = make_library(n_photos=10)
     used = {f"p{i}" for i in range(7)}
-    r = library.pick(lib, "photo", 5, used, set(), NOW, random.Random(4))
+    r = library.pick(lib, "photo", 5, used, set(), random.Random(4))
     ids = [i.id for i in r.items]
     assert r.cycle_reset and r.short == 0 and len(ids) == 5 == len(set(ids)), r
     assert {"p7", "p8", "p9"} <= set(ids)                      # the unused ones come first
@@ -195,25 +192,19 @@ def test_cycle_reset_when_pool_runs_out():
 
 def test_pick_short_when_library_is_tiny():
     lib = make_library(n_photos=3)
-    r = library.pick(lib, "photo", 5, set(), set(), NOW, random.Random(5))
+    r = library.pick(lib, "photo", 5, set(), set(), random.Random(5))
     assert len(r.items) == 3 and r.short == 2 and r.cycle_reset
 
 
-def test_new_items_are_boosted():
+def test_new_items_get_no_preference():
     lib = make_library(n_photos=100, new_photos=10)
     rng = random.Random(7)
     total_new = 0
-    for _ in range(300):
-        r = library.pick(lib, "photo", 10, set(), set(), NOW, rng, boost_days=7, boost_weight=5.0)
+    for _ in range(400):
+        r = library.pick(lib, "photo", 10, set(), set(), rng)
         total_new += sum(1 for i in r.items if i.added >= NOW - timedelta(days=7))
-    mean = total_new / 300
-    assert mean > 2.0, mean                                    # uniform would be 1.0
-    total_plain = 0
-    rng = random.Random(7)
-    for _ in range(300):
-        r = library.pick(lib, "photo", 10, set(), set(), NOW, rng, boost_weight=1.0)
-        total_plain += sum(1 for i in r.items if i.added >= NOW - timedelta(days=7))
-    assert 0.6 < total_plain / 300 < 1.5, total_plain / 300
+    mean = total_new / 400
+    assert 0.75 < mean < 1.25, mean                            # uniform: 10 new of 100, 10 picked -> 1.0 on average
 
 
 def test_merge_scan_keeps_first_seen_time():

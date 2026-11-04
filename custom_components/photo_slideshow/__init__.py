@@ -24,7 +24,6 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 SERVICE_DRY_RUN = "dry_run"
 SERVICE_SCAN = "scan"
 DRY_RUN_SCHEMA = vol.Schema({
-    vol.Optional("include_folders"): vol.All(cv.ensure_list, [cv.string]),
     vol.Optional("exclude_folders"): vol.All(cv.ensure_list, [cv.string]),
     vol.Optional("exclude_files"): vol.All(cv.ensure_list, [cv.string]),
 })
