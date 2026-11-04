@@ -35,8 +35,7 @@ from .const import (
     EVENT_SYNC_FAILED,
     KIND_PHOTO,
     KIND_VIDEO,
-    MARK_FIX,
-    MARK_HIDE,
+    MARK_LIKE,
     MARKS,
     OPT_EXCLUDE_FILES,
     OPT_EXCLUDE_FOLDERS,
@@ -307,16 +306,25 @@ class SlideshowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     # ---- marks from the slideshow page --------------------------------------------------------------------
     @staticmethod
-    def _drop_from_manifest(out: Path, item_id: str) -> None:
-        """Remove an item from the published manifests, so the page stops showing it (the files are replaced atomically)."""
+    def _update_manifest(out: Path, item_id: str, mark: str) -> None:
+        """Reflect a mark in the published manifests (replaced atomically): fix / hide remove the item so the page stops
+        showing it; like sets "liked" on it so the page keeps the heart lit in every cycle."""
         path = out / "manifest.json"
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return
-        items = [e for e in data.get("items", []) if e.get("id") != item_id]
-        if len(items) == len(data.get("items", [])):
-            return
+        if mark == MARK_LIKE:
+            items = data.get("items", [])
+            hit = [e for e in items if e.get("id") == item_id and not e.get("liked")]
+            if not hit:
+                return
+            for e in hit:
+                e["liked"] = True
+        else:
+            items = [e for e in data.get("items", []) if e.get("id") != item_id]
+            if len(items) == len(data.get("items", [])):
+                return
         data["items"], data["count"] = items, len(items)
         for name, text in (("manifest.json", json.dumps(data, ensure_ascii=False, indent=1)),
                            ("manifest.txt", "\n".join(e["file"] for e in items) + "\n")):
@@ -332,8 +340,7 @@ class SlideshowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if item is None:
             raise HomeAssistantError("This item is not in the library (any more)")
         new = self.state.mark(mark, item, _utcnow())
-        if new and mark in (MARK_FIX, MARK_HIDE):
-            await self.hass.async_add_executor_job(self._drop_from_manifest, Path(self.entry.data[CONF_OUTPUT_DIR]), item_id)
+        await self.hass.async_add_executor_job(self._update_manifest, Path(self.entry.data[CONF_OUTPUT_DIR]), item_id, mark)
         self._save()
         self.async_set_updated_data(self.snapshot())
         return {"mark": mark, "new": new, "path": item.path}
@@ -356,7 +363,7 @@ class SlideshowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if target.startswith("notify."):
             service, data = target.split(".", 1)[1], {"title": rep.subject, "message": rep.text}
         elif "@" in target:
-            service, data = self._mail_service(), {"title": rep.subject, "message": rep.text, "target": [target]}
+            service, data = self._mail_service(), {"title": rep.subject, "message": rep.html, "target": [target]}   # sent as HTML
         else:
             raise HomeAssistantError(f"Cannot send to {target!r}: not an e-mail address or a notify service")
         await self.hass.services.async_call("notify", service, data, blocking=True)

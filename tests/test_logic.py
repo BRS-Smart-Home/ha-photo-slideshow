@@ -311,7 +311,8 @@ def test_report_content():
     assert "https://drive.google.com/file/d/a/view" in r.text and "https://drive.google.com/file/d/gone/view" in r.text
     assert "IMG_2_hide.jpg" in r.html and "IMG_2_hide.jpg" in r.text
     assert "R&amp;D &lt;x&gt;.jpg" in r.html and "<x>" not in r.html                # HTML is escaped
-    assert "Year: 2019 - Location: France, Lyon" in r.text
+    assert "Year: 2019\nLocation: France, Lyon" in r.text and "Year: 2019<br>Location: France, Lyon" in r.html
+    assert "Open in Google Drive" in r.html and r.html.startswith("<div")
     assert r.counts == {"like": 1, "fix": 1, "hide": 2}
 
 
