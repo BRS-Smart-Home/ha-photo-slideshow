@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import shutil
 import time
 from collections import Counter
@@ -30,9 +31,13 @@ from .const import (
     CONF_SERVICE_ACCOUNT,
     DEFAULT_OPTIONS,
     DOMAIN,
+    EVENT_REPORT_SENT,
     EVENT_SYNC_FAILED,
     KIND_PHOTO,
     KIND_VIDEO,
+    MARK_FIX,
+    MARK_HIDE,
+    MARKS,
     OPT_EXCLUDE_FILES,
     OPT_EXCLUDE_FOLDERS,
     OPT_FAILS_BEFORE_PUSH,
@@ -40,6 +45,7 @@ from .const import (
     OPT_MAX_VIDEO_SECONDS,
     OPT_PHOTOS_PER_DAY,
     OPT_REPORT_NOTIFY,
+    OPT_REPORT_TIME,
     OPT_SCAN_TIME,
     OPT_SCAN_WEEKDAY,
     OPT_SYNC_TIME,
@@ -51,6 +57,7 @@ from .const import (
 from .drive import DriveAuthError, DriveClient, DriveError
 from .library import Item
 from .manifest_out import build_legacy_manifest, build_manifest, local_name
+from .report import build_report
 from .state import State
 
 _LOGGER = logging.getLogger(__name__)
@@ -111,6 +118,8 @@ class SlideshowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._unsubs.append(async_track_time_change(self.hass, self._weekly_scan, hour=h, minute=m, second=0))
         sh, sm = hm(self.cfg[OPT_SYNC_TIME])
         self._unsubs.append(async_track_time_change(self.hass, self._daily_sync, hour=sh, minute=sm, second=0))
+        rh, rm = hm(self.cfg[OPT_REPORT_TIME])
+        self._unsubs.append(async_track_time_change(self.hass, self._daily_report, hour=rh, minute=rm, second=0))
         if not self.library:                                  # first run: scan right away, in the background
             self.entry.async_create_background_task(self.hass, self.async_scan(), "photo_slideshow_first_scan")
 
@@ -295,6 +304,86 @@ class SlideshowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 await self.hass.services.async_call(domain, service, {"title": "Travel Slideshow", "message": message}, blocking=True)
             except Exception as err:  # noqa: BLE001 - a broken notifier must not break the sync bookkeeping
                 _LOGGER.warning("Could not send the push through %s: %s", target, err)
+
+    # ---- marks from the slideshow page --------------------------------------------------------------------
+    @staticmethod
+    def _drop_from_manifest(out: Path, item_id: str) -> None:
+        """Remove an item from the published manifests, so the page stops showing it (the files are replaced atomically)."""
+        path = out / "manifest.json"
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return
+        items = [e for e in data.get("items", []) if e.get("id") != item_id]
+        if len(items) == len(data.get("items", [])):
+            return
+        data["items"], data["count"] = items, len(items)
+        for name, text in (("manifest.json", json.dumps(data, ensure_ascii=False, indent=1)),
+                           ("manifest.txt", "\n".join(e["file"] for e in items) + "\n")):
+            tmp = out / f".{name}.tmp"
+            tmp.write_text(text, encoding="utf-8")
+            os.replace(tmp, out / name)
+
+    async def async_mark(self, mark: str, item_id: str) -> dict:
+        """Record a like / fix / never-show mark for a library item."""
+        if mark not in MARKS:
+            raise HomeAssistantError(f"Unknown mark {mark!r}")
+        item = self.library.get(item_id)
+        if item is None:
+            raise HomeAssistantError("This item is not in the library (any more)")
+        new = self.state.mark(mark, item, _utcnow())
+        if new and mark in (MARK_FIX, MARK_HIDE):
+            await self.hass.async_add_executor_job(self._drop_from_manifest, Path(self.entry.data[CONF_OUTPUT_DIR]), item_id)
+        self._save()
+        self.async_set_updated_data(self.snapshot())
+        return {"mark": mark, "new": new, "path": item.path}
+
+    # ---- the daily report ----------------------------------------------------------------------------------
+    async def _daily_report(self, now: datetime) -> None:
+        try:
+            await self.async_send_report()
+        except HomeAssistantError as err:
+            _LOGGER.warning("Daily report not sent: %s", err)
+
+    def _mail_service(self) -> str:
+        names = [n for n in self.hass.services.async_services_for_domain("notify") if "gmail" in n]
+        if not names:
+            raise HomeAssistantError("No Gmail notify service found (set up the Google Mail integration)")
+        return sorted(names)[0]
+
+    async def _deliver(self, target: str, rep) -> None:
+        target = str(target).strip()
+        if target.startswith("notify."):
+            service, data = target.split(".", 1)[1], {"title": rep.subject, "message": rep.text}
+        elif "@" in target:
+            service, data = self._mail_service(), {"title": rep.subject, "message": rep.text, "target": [target]}
+        else:
+            raise HomeAssistantError(f"Cannot send to {target!r}: not an e-mail address or a notify service")
+        await self.hass.services.async_call("notify", service, data, blocking=True)
+
+    async def async_send_report(self) -> dict:
+        """E-mail (or push) the marks collected since the last report, then clear them. Nothing marked = nothing sent."""
+        cfg = self.cfg
+        rep = build_report(self.state.pending, self.library, cfg, dt_util.now().replace(tzinfo=None))
+        if rep is None:
+            return {"sent": False, "reason": "nothing was marked"}
+        targets = [t for t in cfg[OPT_REPORT_NOTIFY] if str(t).strip()]
+        if not targets:
+            return {"sent": False, "reason": "no recipients are set"}
+        errors = []
+        for target in targets:
+            try:
+                await self._deliver(target, rep)
+            except Exception as err:  # noqa: BLE001 - report every failed recipient
+                errors.append(f"{target}: {err}")
+        if len(errors) == len(targets):                       # nobody got it: keep the marks for the next try
+            self.hass.bus.async_fire(EVENT_SYNC_FAILED, {"stage": "report", "error": "; ".join(errors)})
+            raise HomeAssistantError("Report not sent: " + "; ".join(errors))
+        self.state.drain_pending()
+        self._save()
+        self.async_set_updated_data(self.snapshot())
+        self.hass.bus.async_fire(EVENT_REPORT_SENT, {"subject": rep.subject, "counts": rep.counts, "errors": errors})
+        return {"sent": True, "subject": rep.subject, "counts": rep.counts, "errors": errors}
 
     # ---- dry run -------------------------------------------------------------------------------------
     def dry_run(self, overrides: dict | None = None) -> dict:

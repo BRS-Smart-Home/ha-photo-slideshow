@@ -24,6 +24,12 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 SERVICE_DRY_RUN = "dry_run"
 SERVICE_SCAN = "scan"
 SERVICE_SYNC = "sync"
+SERVICE_MARK = "mark"
+SERVICE_REPORT = "send_report"
+MARK_SCHEMA = vol.Schema({
+    vol.Required("mark"): vol.In(["like", "fix", "hide"]),
+    vol.Required("id"): cv.string,
+})
 DRY_RUN_SCHEMA = vol.Schema({
     vol.Optional("exclude_folders"): vol.All(cv.ensure_list, [cv.string]),
     vol.Optional("exclude_files"): vol.All(cv.ensure_list, [cv.string]),
@@ -51,6 +57,15 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     hass.services.async_register(DOMAIN, SERVICE_SCAN, handle_scan, supports_response=SupportsResponse.OPTIONAL)
     hass.services.async_register(DOMAIN, SERVICE_SYNC, handle_sync, supports_response=SupportsResponse.OPTIONAL)
+
+    async def handle_mark(call: ServiceCall) -> ServiceResponse:
+        return await _coordinator(hass).async_mark(call.data["mark"], call.data["id"])
+
+    async def handle_report(call: ServiceCall) -> ServiceResponse:
+        return await _coordinator(hass).async_send_report()
+
+    hass.services.async_register(DOMAIN, SERVICE_MARK, handle_mark, schema=MARK_SCHEMA, supports_response=SupportsResponse.OPTIONAL)
+    hass.services.async_register(DOMAIN, SERVICE_REPORT, handle_report, supports_response=SupportsResponse.OPTIONAL)
     return True
 
 

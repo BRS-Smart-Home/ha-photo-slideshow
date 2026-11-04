@@ -24,3 +24,26 @@ dry_run:
       example: '["*_hide.*"]'
       selector:
         object:
+
+mark:
+  name: Mark a photo or video
+  description: Like, fix or never show an item of the slideshow (used by the buttons on the slideshow page).
+  fields:
+    mark:
+      name: Mark
+      description: like, fix or hide.
+      required: true
+      example: like
+      selector:
+        select:
+          options: [like, fix, hide]
+    id:
+      name: Item ID
+      description: The Drive file ID, as listed in the slideshow manifest.
+      required: true
+      selector:
+        text:
+
+send_report:
+  name: Send the report now
+  description: E-mail the marks collected since the last report to the report recipients, then clear them.
