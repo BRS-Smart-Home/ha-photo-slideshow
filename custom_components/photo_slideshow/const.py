@@ -26,7 +26,16 @@ OPT_REPORT_TIME = "report_time"
 OPT_REPORT_NOTIFY = "report_notify"           # list of notify service names, e.g. ["notify.kitsune_brs2_gmail_com"]
 OPT_FAILS_BEFORE_PUSH = "fails_before_push"
 
+# Elements of the slideshow page that can be shown or hidden one by one (option name = "show_" + key; all visible by default)
+SHOW_KEYS = ("title", "date", "prev", "pause", "next", "like", "fix", "hide", "pause_symbol")
+
+
+def show_option(key: str) -> str:
+    return f"show_{key}"
+
+
 DEFAULT_OPTIONS: dict = {
+    **{show_option(k): True for k in SHOW_KEYS},
     OPT_PHOTOS_PER_DAY: 47,
     OPT_PHOTO_SECONDS: 15,
     OPT_VIDEOS_PER_DAY: 3,

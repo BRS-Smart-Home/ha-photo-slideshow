@@ -33,6 +33,8 @@ from .const import (
     OPT_SYNC_TIME,
     OPT_VIDEOS_PER_DAY,
     OPT_VIDEO_FORMATS,
+    SHOW_KEYS,
+    show_option,
 )
 from .drive import DriveAuthError, DriveClient, DriveError, DriveNotFound, FOLDER_MIME
 from .rules import clean_patterns
@@ -181,6 +183,7 @@ class TravelSlideshowOptionsFlow(OptionsFlow):
                 OPT_REPORT_TIME: user_input[OPT_REPORT_TIME],
                 OPT_REPORT_NOTIFY: _parse_lines(user_input[OPT_REPORT_NOTIFY]),
                 OPT_FAILS_BEFORE_PUSH: int(user_input[OPT_FAILS_BEFORE_PUSH]),
+                **{show_option(k): bool(user_input.get(show_option(k), True)) for k in SHOW_KEYS},
             }
             return self.async_create_entry(data=out)
         schema = vol.Schema({
@@ -199,5 +202,6 @@ class TravelSlideshowOptionsFlow(OptionsFlow):
             vol.Required(OPT_REPORT_TIME, default=cur[OPT_REPORT_TIME]): selector.TimeSelector(),
             vol.Required(OPT_REPORT_NOTIFY, default=_lines(cur[OPT_REPORT_NOTIFY])): _TEXT_BOX,
             vol.Required(OPT_FAILS_BEFORE_PUSH, default=cur[OPT_FAILS_BEFORE_PUSH]): _num(1, 10),
+            **{vol.Required(show_option(k), default=bool(cur[show_option(k)])): selector.BooleanSelector() for k in SHOW_KEYS},
         })
         return self.async_show_form(step_id="init", data_schema=schema)

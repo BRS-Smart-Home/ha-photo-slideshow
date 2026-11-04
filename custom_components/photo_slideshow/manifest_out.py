@@ -17,7 +17,7 @@ def local_name(counter: int, parts: Sequence[str], ext: str) -> str:
     return f"{counter}_{clean}.{ext}"
 
 
-def build_manifest(files: Sequence[tuple[Item, str]], photo_seconds: int = 15) -> dict:
+def build_manifest(files: Sequence[tuple[Item, str]], photo_seconds: int = 15, show: Mapping | None = None) -> dict:
     """`files` = (item, local file name) for every item that was downloaded successfully today."""
     entries = []
     for item, fname in files:
@@ -26,7 +26,7 @@ def build_manifest(files: Sequence[tuple[Item, str]], photo_seconds: int = 15) -
             "id": item.id, "file": fname, "kind": item.kind, "lines": title.lines,
             "year": title.year, "country": title.country, "place": title.place, "taken": taken_text(item.meta),
         })
-    return {"version": 1, "photo_seconds": photo_seconds, "count": len(entries), "items": entries}
+    return {"version": 1, "photo_seconds": photo_seconds, "show": dict(show or {}), "count": len(entries), "items": entries}
 
 
 def build_legacy_manifest(files: Sequence[tuple[Item, str]]) -> str:

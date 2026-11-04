@@ -55,7 +55,16 @@
           "scan_time": "Weekly scan: time",
           "report_time": "Daily report time",
           "report_notify": "Report recipients: e-mail addresses or notify services (one per line)",
-          "fails_before_push": "Push after this many failed syncs in a row"
+          "fails_before_push": "Push after this many failed syncs in a row",
+          "show_title": "Show: title box (year / location)",
+          "show_date": "Show: date and time of the photo",
+          "show_prev": "Show: back button",
+          "show_pause": "Show: pause button",
+          "show_next": "Show: next button",
+          "show_like": "Show: like button",
+          "show_fix": "Show: fix / delete button",
+          "show_hide": "Show: never-show button",
+          "show_pause_symbol": "Show: pause symbol in the corner while paused"
         },
         "data_description": {
           "photo_seconds": "Videos always play to their end (up to the longest video setting). A change applies from the next photo on the slideshow page.",

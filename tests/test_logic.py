@@ -440,3 +440,12 @@ def test_used_is_recorded_only_through_the_state():
     for kind, ids, reset in sync.used_ids_to_record(res):
         st.mark_used(kind, ids, cycle_reset=reset)
     assert len(st.used["photo"]) == 4
+
+
+def test_manifest_carries_the_show_options_and_defaults_are_all_visible():
+    it = library.Item("a", ("2022 Spain", "x.jpg"), "photo", NOW)
+    m = manifest_out.build_manifest([(it, "1_x.jpg")], 12, {"date": False, "like": True})
+    assert m["photo_seconds"] == 12 and m["show"] == {"date": False, "like": True}
+    assert manifest_out.build_manifest([(it, "1_x.jpg")])["show"] == {}                 # no options: the page shows everything
+    for k in const.SHOW_KEYS:
+        assert const.DEFAULT_OPTIONS[const.show_option(k)] is True, k

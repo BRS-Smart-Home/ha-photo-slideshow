@@ -51,6 +51,8 @@ from .const import (
     OPT_SYNC_TIME,
     OPT_VIDEOS_PER_DAY,
     SAFETY_MAX_PHOTO_PX,
+    SHOW_KEYS,
+    show_option,
     STORAGE_KEY,
     STORAGE_VERSION,
 )
@@ -129,10 +131,15 @@ class SlideshowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if dt_util.as_local(now).weekday() == int(self.cfg[OPT_SCAN_WEEKDAY]):
             await self.async_scan()
 
+    def _show(self) -> dict[str, bool]:
+        """Which elements of the slideshow page are visible (options 'show_*')."""
+        cfg = self.cfg
+        return {k: bool(cfg[show_option(k)]) for k in SHOW_KEYS}
+
     async def _refresh_manifest_task(self) -> None:
         taken = {i.id: taken_text(i.meta) for i in self.library.values() if i.kind == KIND_PHOTO}
         await self.hass.async_add_executor_job(
-            self._refresh_manifest, Path(self.entry.data[CONF_OUTPUT_DIR]), int(self.cfg[OPT_PHOTO_SECONDS]), taken)
+            self._refresh_manifest, Path(self.entry.data[CONF_OUTPUT_DIR]), int(self.cfg[OPT_PHOTO_SECONDS]), taken, self._show())
 
     async def _daily_sync(self, now: datetime) -> None:
         try:
@@ -212,9 +219,9 @@ class SlideshowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         path.mkdir(parents=True)
 
     @staticmethod
-    def _write_manifests(stage: Path, files: list, photo_seconds: int) -> None:
+    def _write_manifests(stage: Path, files: list, photo_seconds: int, show: dict) -> None:
         (stage / "manifest.json").write_text(
-            json.dumps(build_manifest(files, photo_seconds), ensure_ascii=False, indent=1), encoding="utf-8")
+            json.dumps(build_manifest(files, photo_seconds, show), ensure_ascii=False, indent=1), encoding="utf-8")
         (stage / "manifest.txt").write_text(build_legacy_manifest(files), encoding="utf-8")
 
     @staticmethod
@@ -263,7 +270,7 @@ class SlideshowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ok, why = sync_mod.day_is_acceptable(res, targets)
                 if not ok:
                     raise DriveError(why)
-                await self.hass.async_add_executor_job(self._write_manifests, stage, res.done, int(cfg[OPT_PHOTO_SECONDS]))
+                await self.hass.async_add_executor_job(self._write_manifests, stage, res.done, int(cfg[OPT_PHOTO_SECONDS]), self._show())
                 await self.hass.async_add_executor_job(self._swap_dirs, stage, out)
             except (DriveError, OSError, RuntimeError) as err:
                 await self.hass.async_add_executor_job(lambda: shutil.rmtree(stage, ignore_errors=True))
@@ -342,16 +349,17 @@ class SlideshowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             os.replace(tmp, out / name)
 
     @staticmethod
-    def _refresh_manifest(out: Path, seconds: int, taken: dict) -> None:
-        """Bring the published manifest in line with the 'seconds per photo' option and fill in the capture times of items
-        published before that field existed (the page reads both)."""
+    def _refresh_manifest(out: Path, seconds: int, taken: dict, show: dict) -> None:
+        """Bring the published manifest in line with the 'seconds per photo' and 'show' options and fill in the capture times
+        of items published before that field existed (the page reads all of them)."""
         path = out / "manifest.json"
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return
-        changed = data.get("photo_seconds") != seconds
+        changed = data.get("photo_seconds") != seconds or data.get("show") != show
         data["photo_seconds"] = seconds
+        data["show"] = show
         for e in data.get("items", []):
             if "taken" not in e:
                 e["taken"] = taken.get(e.get("id"))
