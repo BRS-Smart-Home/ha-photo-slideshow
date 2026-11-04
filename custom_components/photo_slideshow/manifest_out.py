@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Mapping, Sequence
 
 from .library import Item
-from .title import enrich, title_from_path
+from .title import enrich, taken_text, title_from_path
 
 
 def local_name(counter: int, parts: Sequence[str], ext: str) -> str:
@@ -24,7 +24,7 @@ def build_manifest(files: Sequence[tuple[Item, str]], photo_seconds: int = 15) -
         title = enrich(title_from_path(item.parts), item.meta)
         entries.append({
             "id": item.id, "file": fname, "kind": item.kind, "lines": title.lines,
-            "year": title.year, "country": title.country, "place": title.place,
+            "year": title.year, "country": title.country, "place": title.place, "taken": taken_text(item.meta),
         })
     return {"version": 1, "photo_seconds": photo_seconds, "count": len(entries), "items": entries}
 

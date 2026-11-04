@@ -59,6 +59,7 @@ from .library import Item
 from .manifest_out import build_legacy_manifest, build_manifest, local_name
 from .report import build_report
 from .state import State
+from .title import taken_text
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -120,8 +121,9 @@ class SlideshowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._unsubs.append(async_track_time_change(self.hass, self._daily_sync, hour=sh, minute=sm, second=0))
         self.entry.async_create_background_task(
             self.hass, self.hass.async_add_executor_job(
-                self._set_manifest_seconds, Path(self.entry.data[CONF_OUTPUT_DIR]), int(self.cfg[OPT_PHOTO_SECONDS])),
-            "photo_slideshow_manifest_seconds")
+                self._refresh_manifest, Path(self.entry.data[CONF_OUTPUT_DIR]), int(self.cfg[OPT_PHOTO_SECONDS]),
+                {i.id: taken_text(i.meta) for i in self.library.values() if i.kind == KIND_PHOTO}),
+            "photo_slideshow_manifest_refresh")
         rh, rm = hm(self.cfg[OPT_REPORT_TIME])
         self._unsubs.append(async_track_time_change(self.hass, self._daily_report, hour=rh, minute=rm, second=0))
         if not self.library:                                  # first run: scan right away, in the background
@@ -339,16 +341,22 @@ class SlideshowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             os.replace(tmp, out / name)
 
     @staticmethod
-    def _set_manifest_seconds(out: Path, seconds: int) -> None:
-        """Bring the published manifest in line with the 'seconds per photo' option (it is read by the page)."""
+    def _refresh_manifest(out: Path, seconds: int, taken: dict) -> None:
+        """Bring the published manifest in line with the 'seconds per photo' option and fill in the capture times of items
+        published before that field existed (the page reads both)."""
         path = out / "manifest.json"
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return
-        if data.get("photo_seconds") == seconds:
-            return
+        changed = data.get("photo_seconds") != seconds
         data["photo_seconds"] = seconds
+        for e in data.get("items", []):
+            if "taken" not in e:
+                e["taken"] = taken.get(e.get("id"))
+                changed = True
+        if not changed:
+            return
         tmp = out / ".manifest.json.tmp"
         tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
         os.replace(tmp, path)

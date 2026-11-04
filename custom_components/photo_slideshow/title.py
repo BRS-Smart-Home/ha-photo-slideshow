@@ -53,6 +53,14 @@ def parse_exif_time(value: str | None) -> datetime | None:
     return None
 
 
+def taken_text(meta: Mapping | None) -> str | None:
+    """The exact moment the picture was taken, 'YYYY-MM-DD HH:MM:SS' (camera local time), or None when unknown / implausible."""
+    taken = parse_exif_time((meta or {}).get("time"))
+    if taken and 1990 <= taken.year <= datetime.now().year + 1:
+        return taken.strftime("%Y-%m-%d %H:%M:%S")
+    return None
+
+
 def enrich(title: Title, meta: Mapping | None) -> Title:
     """Add the exact date from the file's metadata, when there is one (sensible years only)."""
     if not meta:
