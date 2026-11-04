@@ -30,12 +30,16 @@ OPT_FAILS_BEFORE_PUSH = "fails_before_push"
 SHOW_KEYS = ("title", "date", "prev", "pause", "next", "like", "fix", "hide", "pause_symbol")
 
 
+# The page is operated by tapping (pause / play) and swiping (next / previous), so the three navigation keys are off by default.
+HIDDEN_BY_DEFAULT = ("prev", "pause", "next")
+
+
 def show_option(key: str) -> str:
     return f"show_{key}"
 
 
 DEFAULT_OPTIONS: dict = {
-    **{show_option(k): True for k in SHOW_KEYS},
+    **{show_option(k): k not in HIDDEN_BY_DEFAULT for k in SHOW_KEYS},
     OPT_PHOTOS_PER_DAY: 47,
     OPT_PHOTO_SECONDS: 15,
     OPT_VIDEOS_PER_DAY: 3,
