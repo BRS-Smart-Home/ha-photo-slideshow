@@ -53,7 +53,7 @@
           "scan_weekday": "Weekly scan: day",
           "scan_time": "Weekly scan: time",
           "report_time": "Daily report time",
-          "report_notify": "Report: notify services (one per line)",
+          "report_notify": "Report recipients: e-mail addresses or notify services (one per line)",
           "fails_before_push": "Push after this many failed syncs in a row"
         },
         "data_description": {
@@ -61,7 +61,7 @@
           "photo_formats": "File extensions separated by commas, for example: jpg, jpeg, png, heic, tif, bmp, gif",
           "video_formats": "File extensions separated by commas, for example: mp4, mov",
           "exclude_files": "Example: *_hide.* excludes IMG_1_hide.jpg. Rename a photo like that in Drive to remove it from the slideshow for good.",
-          "report_notify": "For example notify.mobile_app_phone. Leave empty to send no report."
+          "report_notify": "An e-mail address (the report is e-mailed there) or a notify service such as notify.mobile_app_phone. Leave empty to send no report."
         }
       }
     }

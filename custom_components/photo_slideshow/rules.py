@@ -44,6 +44,17 @@ def match_segment(pattern: str, segment: str) -> bool:
     return re.search(r"(?<![A-Za-z0-9])" + re.escape(p.lower()) + r"(?![A-Za-z0-9])", segment.lower()) is not None
 
 
+def clean_patterns(values) -> list[str]:
+    """Normalise a hand-typed pattern list: one entry per line; `;` also separates; a trailing `,` or `;` is ignored."""
+    out: list[str] = []
+    for v in values:
+        for part in str(v).split(";"):
+            p = part.strip().rstrip(",").strip()
+            if p:
+                out.append(p)
+    return out
+
+
 def ext_of(name: str) -> str:
     return name.rsplit(".", 1)[1].lower() if "." in name else ""
 
@@ -83,9 +94,10 @@ def evaluate(
     if any(match_glob(p, name) for p in cfg[OPT_EXCLUDE_FILES]):
         return Decision(False, kind, "excluded-name")
     if kind == KIND_VIDEO:
-        if duration_ms is None:
+        if duration_ms is None and size is None:
             return Decision(False, kind, "video-unknown-length")
-        if duration_ms > float(cfg[OPT_MAX_VIDEO_SECONDS]) * 1000:
+        # Google gives no length for some videos: they are judged by size, and the conversion cuts them at the length limit.
+        if duration_ms is not None and duration_ms > float(cfg[OPT_MAX_VIDEO_SECONDS]) * 1000:
             return Decision(False, kind, "video-too-long")
         if size is not None and size > float(cfg[OPT_MAX_VIDEO_MB]) * 1024 * 1024:
             return Decision(False, kind, "video-too-big")

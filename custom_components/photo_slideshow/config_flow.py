@@ -34,6 +34,7 @@ from .const import (
     OPT_VIDEO_FORMATS,
 )
 from .drive import DriveAuthError, DriveClient, DriveError, DriveNotFound, FOLDER_MIME
+from .rules import clean_patterns
 
 _FOLDER_ID = re.compile(r"[A-Za-z0-9_-]{10,}")
 
@@ -138,7 +139,7 @@ def _lines(value: list[str]) -> str:
 
 
 def _parse_lines(text: str) -> list[str]:
-    return [ln.strip() for ln in str(text).splitlines() if ln.strip()]
+    return clean_patterns(str(text).splitlines())
 
 
 def _parse_formats(text: str) -> list[str]:

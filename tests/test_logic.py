@@ -91,7 +91,9 @@ def test_video_limits():
     assert d.included and d.kind == "video"
     assert ev(p, size=10 * MB, duration_ms=40000).reason == "video-too-long"
     assert ev(p, size=70 * MB, duration_ms=20000).reason == "video-too-big"
-    assert ev(p, size=10 * MB, duration_ms=None).reason == "video-unknown-length"
+    assert ev(p, size=10 * MB, duration_ms=None).included                         # no length from Google: judged by size
+    assert ev(p, size=70 * MB, duration_ms=None).reason == "video-too-big"
+    assert ev(p, size=None, duration_ms=None).reason == "video-unknown-length"
     cfg = dict(CFG, max_video_seconds=60, max_video_mb=100)
     assert rules.evaluate(p, cfg, size=90 * MB, duration_ms=50000).included
 
@@ -106,6 +108,17 @@ def test_dry_run_counts():
     ]
     c = rules.dry_run(rows, CFG)
     assert c["photo:ok"] == 2 and c["photo:excluded-folder"] == 1 and c["other:format"] == 1 and c["photo:excluded-name"] == 1, c
+
+
+def test_clean_patterns_tolerates_commas_and_semicolons():
+    typed = ["00 Resources,", "03 Intros,", "temp,", "tmp,", "Motion Graphics Template Media"]
+    assert rules.clean_patterns(typed) == ["00 Resources", "03 Intros", "temp", "tmp", "Motion Graphics Template Media"]
+    assert rules.clean_patterns(["a; b ;c;", "", "  "]) == ["a", "b", "c"]
+    assert rules.clean_patterns(["*_hide.*"]) == ["*_hide.*"]
+    cfg = dict(CFG, exclude_folders=rules.clean_patterns(typed))
+    assert not rules.evaluate(["2020 Italy", "03 Intros", "a.jpg"], cfg).included
+    assert not rules.evaluate(["00 Resources", "x", "a.jpg"], cfg).included
+    assert rules.evaluate(["2020 Italy", "Temple", "a.jpg"], cfg).included
 
 
 def test_suggest_hidden_name():

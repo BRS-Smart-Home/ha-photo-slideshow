@@ -29,6 +29,8 @@ from .const import (
     EVENT_SYNC_FAILED,
     KIND_PHOTO,
     KIND_VIDEO,
+    OPT_EXCLUDE_FILES,
+    OPT_EXCLUDE_FOLDERS,
     OPT_SCAN_TIME,
     OPT_SCAN_WEEKDAY,
     STORAGE_KEY,
@@ -70,7 +72,10 @@ class SlideshowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # ---- options ------------------------------------------------------------------------------
     @property
     def cfg(self) -> dict[str, Any]:
-        return {**DEFAULT_OPTIONS, **self.entry.options}
+        cfg = {**DEFAULT_OPTIONS, **self.entry.options}
+        for key in (OPT_EXCLUDE_FOLDERS, OPT_EXCLUDE_FILES):          # tolerate trailing commas / semicolons typed by hand
+            cfg[key] = rules.clean_patterns(cfg[key])
+        return cfg
 
     # ---- persistence --------------------------------------------------------------------------
     async def async_load(self) -> None:
