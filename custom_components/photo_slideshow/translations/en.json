@@ -14,6 +14,11 @@
           "root_folder_id": "The part after /folders/ in the folder's address.",
           "output_dir": "Where the daily photos are written (used from version 0.2 on)."
         }
+      },
+      "reconfigure": {
+        "title": "Replace the service account key",
+        "description": "Paste the content of the new key file. The library and all marks are kept.",
+        "data": { "service_account": "Service account key (the whole JSON file)" }
       }
     },
     "error": {
@@ -26,7 +31,8 @@
       "cannot_connect": "Cannot reach Google Drive. Try again."
     },
     "abort": {
-      "already_configured": "This folder is already set up."
+      "already_configured": "This folder is already set up.",
+      "reconfigure_successful": "The new key is in use."
     }
   },
   "options": {
@@ -70,6 +76,10 @@
       "excluded": { "name": "Excluded by rules" },
       "new_last_scan": { "name": "New in last scan" },
       "hidden": { "name": "Hidden items" },
+      "likes": { "name": "Likes" },
+      "fixes": { "name": "Fix requests" },
+      "shown_photo": { "name": "Photos shown this cycle" },
+      "shown_video": { "name": "Videos shown this cycle" },
       "last_scan": { "name": "Last scan" },
       "cycle_photo": { "name": "Photo cycle progress" },
       "cycle_video": { "name": "Video cycle progress" }

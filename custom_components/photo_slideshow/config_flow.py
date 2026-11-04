@@ -105,6 +105,36 @@ class TravelSlideshowConfigFlow(ConfigFlow, domain=DOMAIN):
         })
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
 
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Replace the service account key (for example after rotating it); library and marks are kept."""
+        entry = self._get_reconfigure_entry()
+        errors: dict[str, str] = {}
+        if user_input:
+            try:
+                info = json.loads(user_input[CONF_SERVICE_ACCOUNT])
+                if not isinstance(info, dict):
+                    raise ValueError
+            except ValueError:
+                errors[CONF_SERVICE_ACCOUNT] = "invalid_json"
+            else:
+                if info.get("type") != "service_account" or not info.get("client_email") or not info.get("private_key"):
+                    errors[CONF_SERVICE_ACCOUNT] = "invalid_key"
+                else:
+                    client = DriveClient(async_get_clientsession(self.hass), info)
+                    try:
+                        await client.get_file(entry.data[CONF_ROOT_FOLDER_ID])
+                    except DriveAuthError:
+                        errors["base"] = "auth_failed"
+                    except DriveNotFound:
+                        errors[CONF_SERVICE_ACCOUNT] = "folder_not_found"
+                    except DriveError:
+                        errors["base"] = "cannot_connect"
+                    else:
+                        return self.async_update_reload_and_abort(
+                            entry, data_updates={CONF_SERVICE_ACCOUNT: json.dumps(info)})
+        schema = vol.Schema({vol.Required(CONF_SERVICE_ACCOUNT): selector.TextSelector(selector.TextSelectorConfig(multiline=True))})
+        return self.async_show_form(step_id="reconfigure", data_schema=schema, errors=errors)
+
 
 # ---- options: lists are edited as one entry per line --------------------------------------------------------
 def _lines(value: list[str]) -> str:
@@ -120,8 +150,10 @@ def _parse_formats(text: str) -> list[str]:
 
 
 def _num(min_: float, max_: float, step: float = 1, unit: str | None = None) -> selector.NumberSelector:
-    return selector.NumberSelector(selector.NumberSelectorConfig(
-        min=min_, max=max_, step=step, mode=selector.NumberSelectorMode.BOX, unit_of_measurement=unit))
+    config: dict[str, Any] = {"min": min_, "max": max_, "step": step, "mode": selector.NumberSelectorMode.BOX}
+    if unit:                                   # the selector rejects unit_of_measurement=None
+        config["unit_of_measurement"] = unit
+    return selector.NumberSelector(selector.NumberSelectorConfig(**config))
 
 
 _TEXT_BOX = selector.TextSelector(selector.TextSelectorConfig(multiline=True))
