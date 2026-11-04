@@ -456,3 +456,14 @@ def test_path_from_local_name_recovers_a_readable_drive_path():
     assert manifest_out.path_from_local_name("12_2021_Spain_AAA_Tenerife_AAA_Fills_AAA_x_AAA_112.png").startswith("2021 Spain/Tenerife/Fills/")
     it = library.Item("a", ("2022 Spain", "x.heic"), "photo", NOW)
     assert manifest_out.build_manifest([(it, "1_x.jpg")])["items"][0]["path"] == "2022 Spain/x.heic"
+
+
+def test_seen_is_never_reset_but_used_is():
+    st = state.State()
+    st.mark_used("photo", ["a", "b"])
+    st.mark_used("photo", ["c"], cycle_reset=True)                 # a new cycle: 'used' restarts, 'seen' keeps everything
+    assert st.used["photo"] == {"c"} and st.seen["photo"] == {"a", "b", "c"}
+    back = state.State.from_dict(st.to_dict())
+    assert back.seen["photo"] == {"a", "b", "c"} and back.used["photo"] == {"c"}
+    old = state.State.from_dict({"used": {"photo": ["x", "y"]}})   # saved before 'seen' existed
+    assert old.seen["photo"] == {"x", "y"}

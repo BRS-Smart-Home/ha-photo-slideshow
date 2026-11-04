@@ -12,6 +12,7 @@ from .library import Item
 @dataclass
 class State:
     used: dict[str, set[str]] = field(default_factory=lambda: {KIND_PHOTO: set(), KIND_VIDEO: set()})
+    seen: dict[str, set[str]] = field(default_factory=lambda: {KIND_PHOTO: set(), KIND_VIDEO: set()})   # every item ever shown (never reset)
     cycles: dict[str, int] = field(default_factory=lambda: {KIND_PHOTO: 1, KIND_VIDEO: 1})
     hidden: dict[str, dict] = field(default_factory=dict)             # id -> {"path", "at"}
     pending: dict[str, list[dict]] = field(default_factory=lambda: {m: [] for m in MARKS})
@@ -25,6 +26,7 @@ class State:
     def to_dict(self) -> dict:
         return {
             "used": {k: sorted(v) for k, v in self.used.items()},
+            "seen": {k: sorted(v) for k, v in self.seen.items()},
             "cycles": self.cycles, "hidden": self.hidden, "pending": self.pending, "totals": self.totals,
             "today": self.today, "last_sync": self.last_sync, "last_scan": self.last_scan,
             "fails_in_row": self.fails_in_row,
@@ -37,6 +39,7 @@ class State:
             return s
         for k in (KIND_PHOTO, KIND_VIDEO):
             s.used[k] = set(d.get("used", {}).get(k, []))
+            s.seen[k] = set(d.get("seen", {}).get(k, [])) | s.used[k]        # states saved before 'seen' existed start from 'used'
             s.cycles[k] = int(d.get("cycles", {}).get(k, 1))
         s.hidden = dict(d.get("hidden", {}))
         for m in MARKS:
@@ -56,7 +59,9 @@ class State:
         if cycle_reset:
             self.used[kind].clear()
             self.cycles[kind] += 1
+        ids = list(ids)
         self.used[kind].update(ids)
+        self.seen[kind].update(ids)
 
     def progress(self, kind: str, library_count: int) -> float:
         """Share of the library already shown in this cycle, 0-100."""

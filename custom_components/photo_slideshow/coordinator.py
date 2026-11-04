@@ -459,6 +459,11 @@ class SlideshowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         counts = rules.dry_run(self._listing, cfg)
         return {"files_in_listing": len(self._listing), "counts": dict(sorted(counts.items()))}
 
+    def _left(self, kind: str) -> int:
+        """Items of this kind still to be shown in the current cycle (hidden ones do not count)."""
+        used, hidden = self.state.used[kind], self.state.hidden
+        return sum(1 for i in self.library.values() if i.kind == kind and i.id not in used and i.id not in hidden)
+
     # ---- numbers for the entities ----------------------------------------------------------------------
     def snapshot(self) -> dict[str, Any]:
         photos = sum(1 for i in self.library.values() if i.kind == KIND_PHOTO)
@@ -478,6 +483,8 @@ class SlideshowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "fixes": self.state.totals.get("fix", 0), "fixes_pending": len(self.state.pending["fix"]),
             "hidden_pending": len(self.state.pending["hide"]),
             "shown_photo": len(self.state.used[KIND_PHOTO]), "shown_video": len(self.state.used[KIND_VIDEO]),
+            "seen_photo": len(self.state.seen[KIND_PHOTO]), "seen_video": len(self.state.seen[KIND_VIDEO]),
+            "left_photo": self._left(KIND_PHOTO), "left_video": self._left(KIND_VIDEO),
             "progress_photo": self.state.progress(KIND_PHOTO, photos),
             "progress_video": self.state.progress(KIND_VIDEO, videos),
             "cycle_photo": self.state.cycles[KIND_PHOTO], "cycle_video": self.state.cycles[KIND_VIDEO],
