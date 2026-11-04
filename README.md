@@ -16,10 +16,13 @@
 
 | Version | What it does |
 |---|---|
-| 0.1.x | Connects to Google Drive with a **service account** (read-only), scans the photo folder, applies the folder / file / format rules and reports the numbers as sensors. No downloads yet, nothing in the slideshow changes. |
-| **0.2.0** (this) | Nightly sync into the output folder (test folder `www/slideshow`): 47 photos + 3 videos, equal chance for every unused item, photos at original size (HEIC/TIFF/BMP/GIF become JPG), videos cut at 30 s and converted to a small MP4, `manifest.json` + legacy `manifest.txt`, failed items replaced, "used" recorded only on success, repair + event on errors, push after 2 failed syncs. Service `photo_slideshow.sync`, button and sensors. |
-| 0.2.x | Marks (like / fix / never show), 08:00 report, buttons on the slideshow page. |
-| 0.3 | Cut-over from the old `sync_photos.sh` script. |
+| 0.1.x | Connects to Google Drive with a **service account** (read-only), scans the photo folder, applies the folder / file / format rules and reports the numbers as sensors. |
+| 0.2 | Nightly sync into `www/slideshow`: 47 photos + 3 videos, equal chance for every unused item, photos at original size (HEIC/TIFF/BMP/GIF become JPG), videos cut at 30 s and converted to a small MP4, `manifest.json`, failed items replaced, repair + event on errors, push after 2 failed syncs. |
+| 0.3 | Marks (like / fix / never show) with services and a daily e-mail report with Drive links; the old `sync_photos.sh` script was removed (cut-over done). |
+| 0.4 | Options: seconds per photo, show / hide every element of the slideshow page (navigation keys off by default); manifest carries capture time, path and the options; marks also work for items no longer in the library; "Send report now" (does not clear the list, only the scheduled report does). |
+| **0.5.0** (this) | Sensors: unique photos / videos shown (ever) and photos / videos still to show in this cycle. |
+
+The slideshow page itself (`index.html`, gestures, gold dash styling, rolling date) lives in the Home Assistant config repo (`ha-config`, `www/index.html`).
 
 ## Install
 
