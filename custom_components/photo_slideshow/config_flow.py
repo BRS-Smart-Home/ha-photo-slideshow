@@ -23,6 +23,7 @@ from .const import (
     OPT_FAILS_BEFORE_PUSH,
     OPT_MAX_VIDEO_MB,
     OPT_MAX_VIDEO_SECONDS,
+    OPT_PHOTO_SECONDS,
     OPT_PHOTOS_PER_DAY,
     OPT_PHOTO_FORMATS,
     OPT_REPORT_NOTIFY,
@@ -166,6 +167,7 @@ class TravelSlideshowOptionsFlow(OptionsFlow):
         if user_input is not None:
             out = {
                 OPT_PHOTOS_PER_DAY: int(user_input[OPT_PHOTOS_PER_DAY]),
+                OPT_PHOTO_SECONDS: int(user_input[OPT_PHOTO_SECONDS]),
                 OPT_VIDEOS_PER_DAY: int(user_input[OPT_VIDEOS_PER_DAY]),
                 OPT_MAX_VIDEO_SECONDS: int(user_input[OPT_MAX_VIDEO_SECONDS]),
                 OPT_MAX_VIDEO_MB: int(user_input[OPT_MAX_VIDEO_MB]),
@@ -183,6 +185,7 @@ class TravelSlideshowOptionsFlow(OptionsFlow):
             return self.async_create_entry(data=out)
         schema = vol.Schema({
             vol.Required(OPT_PHOTOS_PER_DAY, default=cur[OPT_PHOTOS_PER_DAY]): _num(0, 500),
+            vol.Required(OPT_PHOTO_SECONDS, default=cur[OPT_PHOTO_SECONDS]): _num(3, 120, 1, "s"),
             vol.Required(OPT_VIDEOS_PER_DAY, default=cur[OPT_VIDEOS_PER_DAY]): _num(0, 100),
             vol.Required(OPT_MAX_VIDEO_SECONDS, default=cur[OPT_MAX_VIDEO_SECONDS]): _num(1, 600, 1, "s"),
             vol.Required(OPT_MAX_VIDEO_MB, default=cur[OPT_MAX_VIDEO_MB]): _num(1, 2000, 1, "MB"),

@@ -42,6 +42,7 @@
         "description": "Folder and file rules take one entry per line; formats are separated by commas. Photos are kept at their original size. Changes apply from the next scan or sync.",
         "data": {
           "photos_per_day": "Photos per day",
+          "photo_seconds": "Seconds each photo is shown",
           "videos_per_day": "Videos per day",
           "max_video_seconds": "Longest video",
           "max_video_mb": "Largest video file",
@@ -57,6 +58,7 @@
           "fails_before_push": "Push after this many failed syncs in a row"
         },
         "data_description": {
+          "photo_seconds": "Videos always play to their end (up to the longest video setting). A change applies from the next photo on the slideshow page.",
           "exclude_folders": "Matched against every folder name on the way to a file. A plain word matches a whole word (\"temp\" matches \"aaaa temp\" but not \"Temple\"); entries with * ? [ ] are glob patterns.",
           "photo_formats": "File extensions separated by commas, for example: jpg, jpeg, png, heic, tif, bmp, gif",
           "video_formats": "File extensions separated by commas, for example: mp4, mov",

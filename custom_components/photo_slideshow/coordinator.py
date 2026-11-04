@@ -42,6 +42,7 @@ from .const import (
     OPT_FAILS_BEFORE_PUSH,
     OPT_MAX_VIDEO_MB,
     OPT_MAX_VIDEO_SECONDS,
+    OPT_PHOTO_SECONDS,
     OPT_PHOTOS_PER_DAY,
     OPT_REPORT_NOTIFY,
     OPT_REPORT_TIME,
@@ -117,6 +118,10 @@ class SlideshowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._unsubs.append(async_track_time_change(self.hass, self._weekly_scan, hour=h, minute=m, second=0))
         sh, sm = hm(self.cfg[OPT_SYNC_TIME])
         self._unsubs.append(async_track_time_change(self.hass, self._daily_sync, hour=sh, minute=sm, second=0))
+        self.entry.async_create_background_task(
+            self.hass, self.hass.async_add_executor_job(
+                self._set_manifest_seconds, Path(self.entry.data[CONF_OUTPUT_DIR]), int(self.cfg[OPT_PHOTO_SECONDS])),
+            "photo_slideshow_manifest_seconds")
         rh, rm = hm(self.cfg[OPT_REPORT_TIME])
         self._unsubs.append(async_track_time_change(self.hass, self._daily_report, hour=rh, minute=rm, second=0))
         if not self.library:                                  # first run: scan right away, in the background
@@ -204,8 +209,9 @@ class SlideshowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         path.mkdir(parents=True)
 
     @staticmethod
-    def _write_manifests(stage: Path, files: list) -> None:
-        (stage / "manifest.json").write_text(json.dumps(build_manifest(files), ensure_ascii=False, indent=1), encoding="utf-8")
+    def _write_manifests(stage: Path, files: list, photo_seconds: int) -> None:
+        (stage / "manifest.json").write_text(
+            json.dumps(build_manifest(files, photo_seconds), ensure_ascii=False, indent=1), encoding="utf-8")
         (stage / "manifest.txt").write_text(build_legacy_manifest(files), encoding="utf-8")
 
     @staticmethod
@@ -254,7 +260,7 @@ class SlideshowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ok, why = sync_mod.day_is_acceptable(res, targets)
                 if not ok:
                     raise DriveError(why)
-                await self.hass.async_add_executor_job(self._write_manifests, stage, res.done)
+                await self.hass.async_add_executor_job(self._write_manifests, stage, res.done, int(cfg[OPT_PHOTO_SECONDS]))
                 await self.hass.async_add_executor_job(self._swap_dirs, stage, out)
             except (DriveError, OSError, RuntimeError) as err:
                 await self.hass.async_add_executor_job(lambda: shutil.rmtree(stage, ignore_errors=True))
@@ -331,6 +337,21 @@ class SlideshowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             tmp = out / f".{name}.tmp"
             tmp.write_text(text, encoding="utf-8")
             os.replace(tmp, out / name)
+
+    @staticmethod
+    def _set_manifest_seconds(out: Path, seconds: int) -> None:
+        """Bring the published manifest in line with the 'seconds per photo' option (it is read by the page)."""
+        path = out / "manifest.json"
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return
+        if data.get("photo_seconds") == seconds:
+            return
+        data["photo_seconds"] = seconds
+        tmp = out / ".manifest.json.tmp"
+        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+        os.replace(tmp, path)
 
     async def async_mark(self, mark: str, item_id: str) -> dict:
         """Record a like / fix / never-show mark for a library item."""

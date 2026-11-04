@@ -11,6 +11,7 @@ CONF_OUTPUT_DIR = "output_dir"                # where the slideshow files are wr
 
 # ---- options (all adjustable in the integration options) -----------------------
 OPT_PHOTOS_PER_DAY = "photos_per_day"
+OPT_PHOTO_SECONDS = "photo_seconds"           # how long the page shows each photo (videos play to their end)
 OPT_VIDEOS_PER_DAY = "videos_per_day"
 OPT_MAX_VIDEO_SECONDS = "max_video_seconds"
 OPT_MAX_VIDEO_MB = "max_video_mb"
@@ -27,6 +28,7 @@ OPT_FAILS_BEFORE_PUSH = "fails_before_push"
 
 DEFAULT_OPTIONS: dict = {
     OPT_PHOTOS_PER_DAY: 47,
+    OPT_PHOTO_SECONDS: 15,
     OPT_VIDEOS_PER_DAY: 3,
     OPT_MAX_VIDEO_SECONDS: 30,
     OPT_MAX_VIDEO_MB: 60,
