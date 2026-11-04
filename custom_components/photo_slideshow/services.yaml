@@ -46,4 +46,13 @@ mark:
 
 send_report:
   name: Send the report now
-  description: E-mail the marks collected since the last report to the report recipients, then clear them.
+  description: >-
+    E-mail every mark collected since the last scheduled report (likes, fixes, never-show). The list is NOT cleared, so the next
+    report is complete again; only the scheduled report at the report time clears it.
+  fields:
+    clear:
+      name: Clear the list afterwards
+      description: Start a new list after sending (normally only the scheduled report does this).
+      default: false
+      selector:
+        boolean:

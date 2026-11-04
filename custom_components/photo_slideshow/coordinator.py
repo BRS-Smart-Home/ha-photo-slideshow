@@ -386,7 +386,7 @@ class SlideshowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # ---- the daily report ----------------------------------------------------------------------------------
     async def _daily_report(self, now: datetime) -> None:
         try:
-            await self.async_send_report()
+            await self.async_send_report(clear=True)                 # the scheduled report is the one that starts a new list
         except HomeAssistantError as err:
             _LOGGER.warning("Daily report not sent: %s", err)
 
@@ -406,12 +406,17 @@ class SlideshowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             raise HomeAssistantError(f"Cannot send to {target!r}: not an e-mail address or a notify service")
         await self.hass.services.async_call("notify", service, data, blocking=True)
 
-    async def async_send_report(self) -> dict:
-        """E-mail (or push) the marks collected since the last report, then clear them. Nothing marked = nothing sent."""
+    async def async_send_report(self, clear: bool = False) -> dict:
+        """E-mail (or push) every mark collected since the last SCHEDULED report. Nothing marked = nothing sent.
+
+        With `clear=False` (the 'Send report now' button and service) the list is kept, so the next report is complete again;
+        only the scheduled report (`clear=True`) empties it and starts a new list."""
         cfg = self.cfg
         rep = build_report(self.state.pending, self.library, cfg, dt_util.now().replace(tzinfo=None))
         if rep is None:
             return {"sent": False, "reason": "nothing was marked"}
+        if not clear:
+            rep.subject += " (so far)"
         targets = [t for t in cfg[OPT_REPORT_NOTIFY] if str(t).strip()]
         if not targets:
             return {"sent": False, "reason": "no recipients are set"}
@@ -424,11 +429,12 @@ class SlideshowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if len(errors) == len(targets):                       # nobody got it: keep the marks for the next try
             self.hass.bus.async_fire(EVENT_SYNC_FAILED, {"stage": "report", "error": "; ".join(errors)})
             raise HomeAssistantError("Report not sent: " + "; ".join(errors))
-        self.state.drain_pending()
-        self._save()
-        self.async_set_updated_data(self.snapshot())
-        self.hass.bus.async_fire(EVENT_REPORT_SENT, {"subject": rep.subject, "counts": rep.counts, "errors": errors})
-        return {"sent": True, "subject": rep.subject, "counts": rep.counts, "errors": errors}
+        if clear:
+            self.state.drain_pending()
+            self._save()
+            self.async_set_updated_data(self.snapshot())
+        self.hass.bus.async_fire(EVENT_REPORT_SENT, {"subject": rep.subject, "counts": rep.counts, "errors": errors, "cleared": clear})
+        return {"sent": True, "subject": rep.subject, "counts": rep.counts, "errors": errors, "cleared": clear}
 
     # ---- dry run -------------------------------------------------------------------------------------
     def dry_run(self, overrides: dict | None = None) -> dict:

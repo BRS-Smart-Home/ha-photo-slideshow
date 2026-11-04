@@ -30,6 +30,7 @@ MARK_SCHEMA = vol.Schema({
     vol.Required("mark"): vol.In(["like", "fix", "hide"]),
     vol.Required("id"): cv.string,
 })
+REPORT_SCHEMA = vol.Schema({vol.Optional("clear", default=False): cv.boolean})
 DRY_RUN_SCHEMA = vol.Schema({
     vol.Optional("exclude_folders"): vol.All(cv.ensure_list, [cv.string]),
     vol.Optional("exclude_files"): vol.All(cv.ensure_list, [cv.string]),
@@ -62,10 +63,10 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         return await _coordinator(hass).async_mark(call.data["mark"], call.data["id"])
 
     async def handle_report(call: ServiceCall) -> ServiceResponse:
-        return await _coordinator(hass).async_send_report()
+        return await _coordinator(hass).async_send_report(clear=bool(call.data.get("clear", False)))
 
     hass.services.async_register(DOMAIN, SERVICE_MARK, handle_mark, schema=MARK_SCHEMA, supports_response=SupportsResponse.OPTIONAL)
-    hass.services.async_register(DOMAIN, SERVICE_REPORT, handle_report, supports_response=SupportsResponse.OPTIONAL)
+    hass.services.async_register(DOMAIN, SERVICE_REPORT, handle_report, schema=REPORT_SCHEMA, supports_response=SupportsResponse.OPTIONAL)
     return True
 
 
