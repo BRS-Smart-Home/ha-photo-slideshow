@@ -101,7 +101,8 @@
     },
     "button": {
       "scan_now": { "name": "Scan library now" },
-      "sync_now": { "name": "Sync slideshow now" }
+      "sync_now": { "name": "Sync slideshow now" },
+      "send_report_now": { "name": "Send report now" }
     }
   },
   "issues": {
