@@ -106,6 +106,15 @@ class SlideshowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         data = await self._store.async_load() or {}
         self.library = {d["id"]: Item.from_dict(d) for d in data.get("library", [])}
         self.state = State.from_dict(data.get("state"))
+        # The rules are normally applied during a library scan only, so items from excluded folders stayed in the
+        # stored library until the next weekly scan. Re-apply the CURRENT rules now (no Drive access needed): an
+        # options change reloads the entry, so a newly excluded folder takes effect immediately.
+        cfg = self.cfg
+        kept = {k: it for k, it in self.library.items() if rules.evaluate(it.parts, cfg, it.size, it.duration_ms).included}
+        if len(kept) != len(self.library):
+            _LOGGER.info("Rules re-applied to the stored library: %s items dropped", len(self.library) - len(kept))
+            self.library = kept
+            self._save()
         self.async_set_updated_data(self.snapshot())
 
     def _data_to_save(self) -> dict:
