@@ -9,8 +9,8 @@
   Read-only access, error handling, statistics and a daily report.
 </p>
 
-> **Private repository.** Installed by copying `custom_components/photo_slideshow` into the Home Assistant `custom_components`
-> folder (HACS cannot install private repositories). The full design is in [docs/SPEC.md](docs/SPEC.md).
+> **Private repository.** Installed through HACS as a custom repository (category *Integration*); a manual copy into the
+> Home Assistant `custom_components` folder also works. The full design is in [docs/SPEC.md](docs/SPEC.md).
 
 ## Status
 
@@ -26,7 +26,9 @@ The slideshow page itself (`index.html`, gestures, gold dash styling, rolling da
 
 ## Install
 
-1. Copy the folder `custom_components/photo_slideshow` into `/config/custom_components/` and restart Home Assistant.
+1. **HACS:** add `https://github.com/BRS-Smart-Home/ha-photo-slideshow` as a custom repository (category *Integration*), install
+   *Travel Slideshow* and restart Home Assistant. HACS needs access to the GitHub account that owns this private repository.
+   **Manual:** copy the folder `custom_components/photo_slideshow` into `/config/custom_components/` and restart Home Assistant.
 2. **Settings > Devices & Services > Add integration > Travel Slideshow.**
 3. Paste the **whole content of the service account key file** (the `.json` file) and the **Drive folder ID** (or the folder's web
    address). The key stays in this Home Assistant; it is never sent anywhere except to Google to sign in.
