@@ -23,7 +23,7 @@ OPT_SYNC_TIME = "sync_time"
 OPT_SCAN_WEEKDAY = "scan_weekday"
 OPT_SCAN_TIME = "scan_time"
 OPT_REPORT_TIME = "report_time"
-OPT_REPORT_NOTIFY = "report_notify"           # list of notify service names, e.g. ["notify.kitsune_brs2_gmail_com"]
+OPT_REPORT_NOTIFY = "report_notify"           # list of notify service names, e.g. ["notify.my_gmail_account"]
 OPT_FAILS_BEFORE_PUSH = "fails_before_push"
 
 # Elements of the slideshow page that can be shown or hidden one by one (option name = "show_" + key; all visible by default)

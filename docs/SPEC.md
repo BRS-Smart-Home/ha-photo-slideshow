@@ -16,7 +16,7 @@ folder held 72 photos instead of 100, nothing was resized, and the photo list (`
 
 - **Google Drive API, read-only, through a service account** (a robot identity, not a Gmail account). The photo root folder
   (`Pictures`) is shared with the service account as **Viewer**; it can see nothing else, can change nothing and does not
-  expire. The project is owned by a spare Google account (`kitsune.brs2`), the photos by the main account.
+  expire. The Cloud project can belong to any Google account; the photos can belong to another.
 - The service account JSON key is pasted into the config flow and stored in the config entry (`.storage`, never in git).
 - The integration can never delete or rename originals. "Delete" always means "hide in the slideshow and tell me".
 
