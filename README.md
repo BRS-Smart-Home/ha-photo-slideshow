@@ -32,10 +32,11 @@ Your originals are never changed, renamed or deleted.
 - [Show the slideshow](#show-the-slideshow)
 - [How the daily sync works, and automations](#how-the-daily-sync-works-and-automations)
 - [Options](#options)
+- [Supported formats and what is changed](#supported-formats-and-what-is-changed)
 - [Entities and services](#entities-and-services)
 - [Marks and the daily report](#marks-and-the-daily-report)
 - [Troubleshooting](#troubleshooting)
-- [Version history](#version-history) · [Development](#development)
+- [To do](#to-do) · [Version history](#version-history) · [Development](#development)
 
 ## Install
 
@@ -273,6 +274,60 @@ All settings are options of the integration (**Configure**).
 
 Changes apply from the next scan or sync; the page options are picked up at the next slide.
 
+## Supported formats and what is changed
+
+Only copies are changed. The files in Google Drive are never touched; every day's selection is written as new files to the output
+folder (default `/config/www/slideshow`), which is replaced by a freshly built one at each sync.
+
+### Photos
+
+| Format | Supported | What happens |
+|---|---|---|
+| JPG / JPEG | yes (default) | Copied **unchanged** (EXIF kept) when its long side is at most 8192 px |
+| PNG | yes (default) | Copied **unchanged** when its long side is at most 8192 px |
+| HEIC (iPhone) | yes (default) | Converted to **JPG**, quality 90, rotated upright from the EXIF orientation. Needs `pillow-heif` (installed automatically) |
+| TIFF / TIF | yes (default) | Converted to JPG, quality 90, rotated upright |
+| BMP | yes (default) | Converted to JPG, quality 90 |
+| GIF | yes (default) | Converted to a still JPG (first frame, no animation) |
+| WebP, other formats Pillow can open | untested | Can be added in the *Photo formats* option; they would be converted to JPG |
+| RAW (CR2, NEF, ARW, DNG ...), PSD | **no** | Skipped |
+
+Other changes to photos:
+
+- **Size:** photos keep their original resolution (4K stays 4K). Only a picture longer than 8192 px on its long side is scaled
+  down to 8192 px (a safety limit for the display, not a setting).
+- **Transparency** is lost in photos that have to be converted (a GIF, or a PNG over the size limit): they are saved as plain JPG.
+- **File name:** the copy is renamed to `<number>_<year>_<country>_AAA_<place>_AAA_<original name>.<ext>`; the page reads the
+  title (country, place) from it and from the manifest, and the capture date and time from the photo's metadata in Drive.
+- **Nothing is drawn into the picture:** no watermark, no text, no crop. The page shows the picture scaled to fill the screen
+  (`object-fit: cover`, so the edges can be cropped on a screen with another shape) and moves the camera slowly over it
+  (see [To do](#to-do)).
+
+### Videos
+
+| Format | Supported | What happens |
+|---|---|---|
+| MP4 (H.264) | yes (default) | Re-encoded as described below |
+| MOV (iPhone, Apple) | yes (default) | Re-encoded as described below |
+| AVI, MKV, M4V, WebM ... | untested | Can be added in the *Video formats* option; ffmpeg reads most of them and the result is the same MP4 |
+
+Every video is **always** re-encoded by ffmpeg into a small file that plays on any tablet:
+
+- **Container and codec:** MP4, H.264 (`libx264`, `yuv420p`, fast start), CRF 28.
+- **Resolution:** scaled down to at most **720p** (height 720, width follows; never scaled up).
+- **Sound:** **removed** (the slideshow is silent).
+- **Length:** cut after the **longest video** setting (default 30 s). A source video that Drive reports as longer than the limit is
+  not picked at all; when Drive reports no length, the file is judged by its size and cut at the limit.
+- **Size:** if the result is still larger than the **largest video file** setting (default 60 MB) it is encoded once more at
+  480p and CRF 34. If it is still too big, the video is dropped for that day and replaced by another one. A source file bigger
+  than the size limit is not picked at all.
+
+### If a file cannot be converted
+
+A photo or video that fails (corrupt file, missing `pillow-heif` or `ffmpeg`, timeout) is **replaced by another item** of the same
+kind and is not counted as shown. The day is built with what worked; if too many items fail, the sync is reported as a problem
+(*Sync problem* sensor and a Repair).
+
 ## Entities and services
 
 **Sensors:** photos / videos in library, files seen in Drive, excluded by rules (the attribute `by_rule` lists the reasons), new in
@@ -315,6 +370,20 @@ The report arrives every morning at the report time, only when something was mar
 | Buttons do nothing | The page has no access token. Embed it in a dashboard card or create `/config/www/ha-token.js` (see above). |
 | The page does not change after an update | Raise the number behind `index.html?` in the dashboard URL. |
 | Sensors show 0 files | The library scan has not finished, or the folder is empty or the rules exclude everything. Use `photo_slideshow.dry_run`. |
+
+## To do
+
+**Smart camera moves.** Today the page moves the camera over every photo the same simple way (a slow pan of about 8 % at 1.2x
+zoom, horizontal for wide pictures and vertical for tall ones, in a random direction, over the "seconds each photo is shown").
+It knows nothing about what is in the picture, so it can pan away from the subject. Planned:
+
+- A **focus point for each photo**, found with a lightweight saliency analysis at sync time (no cloud, nothing leaves Home
+  Assistant) and written to `manifest.json`.
+- The page then **zooms and pans toward the subject** and keeps it in view instead of moving at random.
+- Later: **face-aware** moves that never cut off a head.
+
+Other ideas: nearest town from the GPS data of a photo, stills for longer videos, RAW and PSD support, and a native dashboard card
+instead of the iframe. Suggestions are welcome as GitHub issues.
 
 ## Version history
 
