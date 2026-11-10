@@ -1,6 +1,6 @@
 # ha-photo-slideshow
 
-Private Home Assistant custom integration **`photo_slideshow`** ("Travel Slideshow"): keeps the travel-photo
+Home Assistant custom integration **`photo_slideshow`** ("Travel Slideshow"): keeps the travel-photo
 slideshow on the Dash3 dashboard fed, reacts to problems, and keeps statistics.
 
 > **Status: design / spec** (agreed 2026-11-04). Replaces `scripts/sync_photos.sh` + the `shell_command`
@@ -97,4 +97,4 @@ Google Photos was considered and rejected: since 31 March 2025 its API only read
 
 ## Names
 
-Repository `BRS-Smart-Home/ha-photo-slideshow` (private), domain `photo_slideshow`, Google Cloud project `ha-photo-slideshow`.
+Repository `BRS-Smart-Home/ha-photo-slideshow`, domain `photo_slideshow`, Google Cloud project `ha-photo-slideshow`.
