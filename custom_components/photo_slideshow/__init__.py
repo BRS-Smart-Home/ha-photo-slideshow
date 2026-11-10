@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 import voluptuous as vol
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse
@@ -45,6 +47,10 @@ def _coordinator(hass: HomeAssistant) -> SlideshowCoordinator:
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    # The slideshow page ships with the integration: /photo_slideshow/index.html (no long-lived caching, so updates arrive at once)
+    await hass.http.async_register_static_paths(
+        [StaticPathConfig("/photo_slideshow", str(Path(__file__).parent / "web"), cache_headers=False)])
+
     async def handle_dry_run(call: ServiceCall) -> ServiceResponse:
         return _coordinator(hass).dry_run({k: v for k, v in call.data.items()})
 

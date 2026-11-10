@@ -467,3 +467,9 @@ def test_seen_is_never_reset_but_used_is():
     assert back.seen["photo"] == {"a", "b", "c"} and back.used["photo"] == {"c"}
     old = state.State.from_dict({"used": {"photo": ["x", "y"]}})   # saved before 'seen' existed
     assert old.seen["photo"] == {"x", "y"}
+
+
+def test_page_extras_are_off_by_default():
+    d = const.DEFAULT_OPTIONS
+    assert d[const.OPT_MODE_ENTITY] == "" and d[const.OPT_EXIT_HELPER] == "" and d[const.OPT_CLEAN_ENTITIES] == []
+    assert d[const.OPT_MODE_FOLDER] == "/local/webmedia/" and d[const.OPT_EXIT_MINUTES] == 10

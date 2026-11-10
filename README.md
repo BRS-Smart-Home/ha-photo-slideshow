@@ -22,9 +22,39 @@
 | 0.4 | Options: seconds per photo, show / hide every element of the slideshow page (navigation keys off by default); manifest carries capture time, path and the options; marks also work for items no longer in the library; "Send report now" (does not clear the list, only the scheduled report does). |
 | 0.5.0 | Sensors: unique photos / videos shown (ever) and photos / videos still to show in this cycle. |
 | 0.6.0 | New option "Show: item counter": a small `12 / 50` in the top right corner of the slideshow page (off by default). |
-| **0.6.1** (this) | Release version bump for the HACS download (no code change since 0.6.0). |
+| 0.6.1 | Release version bump for the HACS download (no code change since 0.6.0). |
+| **0.7.0** (this) | The slideshow page now ships with the integration at `/photo_slideshow/index.html` and updates with it. Optional extras (mode videos, exit countdown, cleaning note) are options, off by default. |
 
-The slideshow page itself (`index.html`, gestures, gold dash styling, rolling date) lives in the Home Assistant config repo (`ha-config`, `www/index.html`).
+## Show the slideshow
+
+The integration serves the page itself, so there is nothing to copy. Add a **Webpage** card (or an iframe card) to a dashboard:
+
+```yaml
+type: iframe
+url: /photo_slideshow/index.html
+aspect_ratio: 56%
+```
+
+or open `http://<your-home-assistant>:8123/photo_slideshow/index.html` full screen (a kiosk tablet, for example). The page is never
+cached for long, so an update of the integration reaches every screen after a reload.
+
+The page shows today's items (written to `/config/www/slideshow` by the nightly sync) with gestures: **tap** = pause / play,
+**swipe** = next / previous. The like / fix / never-show buttons need to talk to Home Assistant: inside a dashboard card the page
+uses your logged-in session; on a screen without one (a kiosk), create a long-lived access token and save it as
+`/config/www/ha-token.js` containing `const ha_token = "<token>";`. Keep that file private. Your own colours or fonts can go into
+`/config/www/slideshow_custom.css`, which the page loads when it exists. `?media=/local/other/` points the page to another output
+folder.
+
+### Optional extras (off by default)
+
+Options of the integration, all empty by default and then never touched:
+
+| Option | What it does |
+|---|---|
+| Mode video entity | An `input_text` such as `input_text.video_mode`. `home` runs the slideshow; any other value (`coffee`, `exit`, `sleep` ...) plays `<folder>/<value>.mp4` in a loop instead. |
+| Mode video folder | Where those videos live, default `/local/webmedia/` (`/config/www/webmedia`). |
+| Exit countdown entity and minutes | An `input_boolean`: while it is on and the mode is `exit`, a flip clock counts the minutes until the house is armed. |
+| Vacuum entities | While the mode is `exit` and any of these is cleaning, a "Cleaning: in progress" note shows. |
 
 ## Install
 

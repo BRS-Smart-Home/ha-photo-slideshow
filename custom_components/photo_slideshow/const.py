@@ -25,6 +25,11 @@ OPT_SCAN_TIME = "scan_time"
 OPT_REPORT_TIME = "report_time"
 OPT_REPORT_NOTIFY = "report_notify"           # list of notify service names, e.g. ["notify.my_gmail_account"]
 OPT_FAILS_BEFORE_PUSH = "fails_before_push"
+OPT_MODE_ENTITY = "mode_entity"                 # optional input_text whose state (home, coffee, exit, ...) switches the page to a mode video
+OPT_MODE_FOLDER = "mode_folder"                 # where the mode videos live, one <mode>.mp4 per mode
+OPT_EXIT_HELPER = "exit_helper"                 # optional input_boolean: while on, the exit mode shows the arming countdown
+OPT_EXIT_MINUTES = "exit_minutes"
+OPT_CLEAN_ENTITIES = "clean_entities"           # optional vacuums: "Cleaning: in progress" under the exit title while any is cleaning
 
 # Elements of the slideshow page that can be shown or hidden one by one (option name = "show_" + key; all visible by default)
 SHOW_KEYS = ("title", "date", "prev", "pause", "next", "like", "fix", "hide", "pause_symbol", "counter")
@@ -56,6 +61,11 @@ DEFAULT_OPTIONS: dict = {
     OPT_REPORT_TIME: "08:00",
     OPT_REPORT_NOTIFY: [],
     OPT_FAILS_BEFORE_PUSH: 2,
+    OPT_MODE_ENTITY: "",
+    OPT_MODE_FOLDER: "/local/webmedia/",
+    OPT_EXIT_HELPER: "",
+    OPT_EXIT_MINUTES: 10,
+    OPT_CLEAN_ENTITIES: [],
 }
 
 # ---- marks made from the slideshow ------------------------------------------------

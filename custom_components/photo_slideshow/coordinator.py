@@ -51,6 +51,11 @@ from .const import (
     OPT_SYNC_TIME,
     OPT_VIDEOS_PER_DAY,
     SAFETY_MAX_PHOTO_PX,
+    OPT_CLEAN_ENTITIES,
+    OPT_EXIT_HELPER,
+    OPT_EXIT_MINUTES,
+    OPT_MODE_ENTITY,
+    OPT_MODE_FOLDER,
     SHOW_KEYS,
     show_option,
     STORAGE_KEY,
@@ -140,10 +145,19 @@ class SlideshowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if dt_util.as_local(now).weekday() == int(self.cfg[OPT_SCAN_WEEKDAY]):
             await self.async_scan()
 
-    def _show(self) -> dict[str, bool]:
+    def _show(self) -> dict[str, Any]:
         """Which elements of the slideshow page are visible (options 'show_*')."""
         cfg = self.cfg
-        return {k: bool(cfg[show_option(k)]) for k in SHOW_KEYS}
+        show: dict[str, Any] = {k: bool(cfg[show_option(k)]) for k in SHOW_KEYS}
+        # optional extras of the page (mode videos, exit countdown); empty entity = feature off
+        show["modes"] = {
+            "entity": str(cfg[OPT_MODE_ENTITY] or "").strip(),
+            "folder": str(cfg[OPT_MODE_FOLDER] or "/local/webmedia/").strip(),
+            "exit_helper": str(cfg[OPT_EXIT_HELPER] or "").strip(),
+            "exit_minutes": int(cfg[OPT_EXIT_MINUTES]),
+            "clean": [str(e).strip() for e in (cfg[OPT_CLEAN_ENTITIES] or []) if str(e).strip()],
+        }
+        return show
 
     async def _refresh_manifest_task(self) -> None:
         taken = {i.id: taken_text(i.meta) for i in self.library.values() if i.kind == KIND_PHOTO}

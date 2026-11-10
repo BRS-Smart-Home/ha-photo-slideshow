@@ -1,0 +1,109 @@
+/* Travel Slideshow page. Fonts: DSEG7 Classic by Keshikan (SIL Open Font License 1.1, https://www.keshikan.net/fonts-e.html). */
+@font-face { font-family: 'dseg7'; src: url('fonts/DSEG7Classic-Regular.ttf') format('truetype'); font-weight: normal; font-style: normal; }
+@font-face { font-family: 'dseg7bold'; src: url('fonts/DSEG7Classic-Bold.ttf') format('truetype'); font-weight: normal; font-style: normal; }
+.date-font { font-family: 'dseg7bold', monospace; font-size: 0.6em; letter-spacing: 1px; }
+
+@charset "utf-8";
+/* CSS Document */
+
+body {
+    background-color: #111111;
+    margin: 0;
+    overflow: hidden; /* Prevent scrollbars */
+}
+
+#boxvideo {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1; /* Pushes the video/photo behind everything */
+    background-color: #111111;
+}
+
+/* Ensure the image/video itself fills the container */
+.video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover; 
+    transition: opacity 1.5s ease-in-out; /* Adds the 1.5-second fade effect */
+}
+
+
+/* Updated Position for Photo Name Logger */
+#photoname-logger {
+    position: absolute;
+    top: 20px;
+    left: 10px;
+    z-index: 10;
+    color: #000000; 
+    font-size: 10px;
+    font-family: "C64 Pro Mono Local", monospace;
+    background-color: rgba(245, 150, 0, 0.7); 
+    border-radius: 8px; 
+    padding: 8px 12px; 
+    text-align: left !important;
+    width: fit-content !important;
+    display: block !important;
+    transition: opacity 1.5s ease-in-out; /* Adds the fade effect to the gold box */
+}
+
+@keyframes pan-h-left {
+    0% { transform: scale(1.2) translateX(-8%); }
+    100% { transform: scale(1.2) translateX(8%); }
+}
+
+@keyframes pan-h-right {
+    0% { transform: scale(1.2) translateX(8%); }
+    100% { transform: scale(1.2) translateX(-8%); }
+}
+
+@keyframes pan-v-top {
+    0% { transform: scale(1.2) translateY(-8%); }
+    100% { transform: scale(1.2) translateY(8%); }
+}
+
+@keyframes pan-v-bottom {
+    0% { transform: scale(1.2) translateY(8%); }
+    100% { transform: scale(1.2) translateY(-8%); }
+}
+.hidden {
+  display: none;
+  visibility: hidden;
+	
+}
+
+/* ----- blinking cursor animation ----- */
+.typed-cursor{
+  opacity: 1;
+  /* steps(1): a hard on/off blink = 2 repaints per cycle instead of 60 fps of fading */
+  -webkit-animation: blink 0.95s steps(1) infinite;
+  animation: blink 0.95s steps(1) infinite;
+}
+
+@-keyframes blink{
+  0% { opacity:1; }
+  50% { opacity:0; }
+  100% { opacity:1; }
+}
+@-webkit-keyframes blink{
+  0% { opacity:1; }
+  50% { opacity:0; }
+  100% { opacity:1; }
+}
+@-moz-keyframes blink{
+  0% { opacity:1; }
+  50% { opacity:0; }
+  100% { opacity:1; }
+}
+@-ms-keyframes blink{
+  0% { opacity:1; }
+  50% { opacity:0; }
+  100% { opacity:1; }
+}
+@-o-keyframes blink{
+  0% { opacity:1; }
+  50% { opacity:0; }
+  100% { opacity:1; }
+}

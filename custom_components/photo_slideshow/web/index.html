@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Travel Slideshow</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- optional: your own overrides and fonts (for example a @font-face for "C64 Pro Mono Local"); a missing file is harmless -->
+    <link rel="stylesheet" href="/local/slideshow_custom.css">
+</head>
+
+<body>
+
+<!-- optional: /config/www/ha-token.js with   const ha_token = "<long-lived access token>";   Without it the page tries the logged-in
+     Home Assistant session it is embedded in (iframe card). Needed only for the like / fix / hide buttons and the optional modes. -->
+<script src="/local/ha-token.js" onerror="void 0"></script>
+<script>
+        var delayInMilliseconds = 50;
+
+        var slideshowTimer = null;
+        var slideshowActive = false;
+        // folder written by the integration (default /config/www/slideshow); the page can be pointed elsewhere with ?media=/local/other/
+        var MEDIA = (function () {
+            var m = /[?&]media=([^&]+)/.exec(location.search);
+            var p = m ? decodeURIComponent(m[1]) : "/local/slideshow/";
+            return p.charAt(p.length - 1) === "/" ? p : p + "/";
+        })();
+        var currentItem = null;
+        var photoNameTimeout = null;
+        var currentPhotoIndex = 0;
+
+        // optional extras (mode videos, exit countdown): settings arrive in manifest.json (show.modes); an empty entity = feature off
+        var MODES = { entity: "", folder: "/local/webmedia/", exit_helper: "", exit_minutes: 10, clean: [] };
+        let lastSeenVideoMode = "INIT";
+
+        // Access token for the like / fix / hide buttons and the optional modes: ha-token.js if present, else the session of the
+        // Home Assistant page this one is embedded in. Read fresh at every call (session tokens expire).
+        function getToken() {
+            try { if (typeof ha_token !== "undefined" && ha_token) return ha_token; } catch (e) {}
+            try {
+                var auth = window.parent.document.querySelector("home-assistant").hass.auth;
+                return auth.accessToken || (auth.data && auth.data.access_token) || "";
+            } catch (e) { return ""; }
+        }
+
+        // ---- 1. OPTIONAL MODE VIDEOS (an input_text entity such as input_text.video_mode) ----
+        function pollVideoMode() {
+            const ha_url = "/api/states/" + MODES.entity;
+
+            fetch(ha_url, {
+                method: 'GET',
+                headers: {
+                    'Authorization': 'Bearer ' + getToken(),
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => {
+                if (!response.ok) throw new Error(response.status);
+                return response.json();
+            })
+            .then(data => {
+                let currentMode = data.state;
+                
+                // On first boot, apply immediately
+                if (lastSeenVideoMode === "INIT") {
+                    lastSeenVideoMode = currentMode;
+                    applyVideoMode(currentMode);
+                } 
+                // On subsequent changes, apply the new video
+                else if (currentMode && currentMode !== lastSeenVideoMode && currentMode !== "unknown" && currentMode !== "unavailable") {
+                    lastSeenVideoMode = currentMode;
+                    applyVideoMode(currentMode);
+                }
+                
+                // Loop the check every 2 seconds
+                setTimeout(pollVideoMode, 2000);
+            })
+            .catch(error => {
+                console.error('Video API Fetch Failed:', error);
+                if (lastSeenVideoMode === "INIT") {
+                    lastSeenVideoMode = "home";
+                    applyVideoMode("home");
+                }
+                setTimeout(pollVideoMode, 10000);
+            });
+        }
+
+        // ---- exit countdown: flip digits MM:SS in the top-right corner of the exit video ----
+        // Counts down to the moment the "Home Return" automation arms the entrance motion sensor (the exit helper has to be on
+        // this many minutes first). Change the number here if that automation changes.
+        // minutes until armed: option "Exit countdown: minutes" (MODES.exit_minutes)
+
+        var EXIT_ARMED_SHOW_MS = 10000;      // "Armed Successfully" stays this long, then fades out
+        var exitTimer = null, exitEnd = 0, exitShown = "", exitArmedAt = 0, exitHideTimer = null;
+        var exitCdTest = /[?&]cdtest/.test(location.search);   // index.html?cdtest : start a fresh countdown right now (for testing)
+        // one flip-clock digit: static top half (new digit), static bottom half (old digit), plus two flaps that turn over
+        function flipHtml(ch) {
+            function half(c) { return "<span class='h " + c + "'><span>" + ch + "</span></span>"; }
+            return "<span class='fd' data-v='" + ch + "'>" + half("top") + half("bot") + half("ft") + half("fb") + "</span>";
+        }
+        function buildExitCd(force) {
+            var el = document.getElementById("exit-cd");
+            if (!el || (el.dataset.built && !force)) return el;
+            if (exitHideTimer) { clearTimeout(exitHideTimer); exitHideTimer = null; }
+            var h = "<span class='cdlab'>Armed in:</span><span class='cdbody'>";
+            for (var i = 0; i < 5; i++) h += (i === 2) ? "<span class='cdsep'>:</span>" : flipHtml("0");
+            h += "</span><span class='cdmsg'>Armed Successfully</span>";
+            el.innerHTML = h;
+            el.className = "";
+            el.style.opacity = "";
+            el.dataset.built = "1";
+            return el;
+        }
+        // real flip: the top flap (old digit) folds down, then the bottom flap (new digit) falls into place
+        function flipDigit(fd, ch) {
+            var old = fd.dataset.v;
+            if (old === ch) return;
+            fd.dataset.v = ch;
+            var q = function (c) { return fd.querySelector("." + c + " > span"); };
+            var ft = fd.querySelector(".ft"), fb = fd.querySelector(".fb");
+            q("top").textContent = ch;           // revealed while the old top flap folds away
+            q("ft").textContent = old;
+            q("fb").textContent = ch;
+            if (!ft.animate) { q("bot").textContent = ch; return; }
+            ft.style.visibility = "visible"; fb.style.visibility = "hidden";
+            var a = ft.animate([{ transform: "rotateX(0deg)" }, { transform: "rotateX(-90deg)" }], { duration: 170, easing: "ease-in", fill: "forwards" });
+            a.onfinish = function () {
+                ft.style.visibility = "hidden"; fb.style.visibility = "visible";
+                var b = fb.animate([{ transform: "rotateX(90deg)" }, { transform: "rotateX(0deg)" }], { duration: 190, easing: "ease-out", fill: "forwards" });
+                b.onfinish = function () { q("bot").textContent = ch; fb.style.visibility = "hidden"; a.cancel(); b.cancel(); };
+            };
+        }
+        // countdown reached zero: "Armed Successfully" for 10 s, then fade out and stop ticking
+        function showArmed(el, msLeft) {
+            el.classList.add("done");
+            if (exitHideTimer) clearTimeout(exitHideTimer);
+            exitHideTimer = setTimeout(function () {
+                el.style.opacity = "0";                                             // fades via the CSS transition
+                exitHideTimer = setTimeout(function () { el.style.display = "none"; exitHideTimer = null; }, 1400);
+            }, Math.max(0, msLeft));
+            if (exitTimer && exitTimer !== -1) { clearInterval(exitTimer); }
+            exitTimer = -1;                                                         // marker only: the "Cleaning" indicator still checks exitTimer
+        }
+        // make the countdown box exactly as tall as, and level with, the "Exit Mode" title box on the other side
+        function syncExitCdBox() {
+            var el = document.getElementById("exit-cd"), t = document.getElementById("photoname-logger");
+            if (!el || !t) return;
+            var r = t.getBoundingClientRect();
+            if (r.height > 0) { el.style.top = Math.round(r.top) + "px"; el.style.height = Math.round(r.height) + "px"; }
+        }
+        function exitTick() {
+            var el = buildExitCd();
+            var rem = Math.max(0, exitEnd - Date.now());
+            var m = Math.floor(rem / 60000), s = Math.floor(rem / 1000) % 60;
+            var txt = (m < 10 ? "0" : "") + m + (s < 10 ? "0" : "") + s;        // "MMSS"
+            var ds = el.querySelectorAll(".fd");
+            for (var i = 0; i < 4; i++) {
+                if (exitShown === "") {
+                    var d = ds[i], c = txt.charAt(i);
+                    d.dataset.v = c;
+                    var sp = d.querySelectorAll(".h > span"); for (var k = 0; k < sp.length; k++) sp[k].textContent = c;
+                } else flipDigit(ds[i], txt.charAt(i));
+            }
+            exitShown = txt;
+            if (rem === 0 && !exitArmedAt) { exitArmedAt = Date.now(); showArmed(el, EXIT_ARMED_SHOW_MS); }
+        }
+        // ---- "Cleaning: in progress" under the Exit Mode title while exit is on and any robot vacuum is cleaning ----
+        // vacuums: option "Exit mode: vacuum entities" (MODES.clean)
+        var cleanTimer = null;
+        function exitCleanTick() {
+            Promise.all((MODES.clean || []).map(function (id) {
+                return fetch("/api/states/" + id, { headers: { 'Authorization': 'Bearer ' + getToken() } })
+                    .then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+            })).then(function (res) {
+                var cleaning = res.some(function (s) { return s && s.state === "cleaning"; });
+                var el = document.getElementById("exit-clean"), title = document.getElementById("photoname-logger");
+                if (!el) return;
+                if (cleaning && exitTimer) {
+                    var b = title ? title.getBoundingClientRect().bottom : 40;
+                    el.style.top = Math.round(b + 6) + "px";                         // right below the Exit Mode box
+                    el.style.display = "block";
+                } else {
+                    el.style.display = "none";
+                }
+            });
+        }
+
+        function exitCountdown(on) {
+            var el = document.getElementById("exit-cd");
+            if (!el) return;
+            if (!on) {
+                if (exitTimer) { clearInterval(exitTimer); exitTimer = null; }
+                if (cleanTimer) { clearInterval(cleanTimer); cleanTimer = null; }
+                if (exitHideTimer) { clearTimeout(exitHideTimer); exitHideTimer = null; }
+                el.style.display = "none"; exitShown = ""; exitArmedAt = 0;
+                var cl = document.getElementById("exit-clean"); if (cl) cl.style.display = "none";
+                return;
+            }
+            if (exitTimer) return;                                                   // already running
+            exitShown = ""; exitArmedAt = 0;
+            var ms = (MODES.exit_minutes || 10) * 60000;
+            function start(t0) {
+                exitEnd = t0 + ms;
+                var late = Date.now() - exitEnd;                                     // ms since the countdown reached zero (negative = still running)
+                if (MODES.exit_helper && late < EXIT_ARMED_SHOW_MS) {           // nothing to show if it armed more than 10 s ago
+                    buildExitCd(true); exitTick();
+                    el.style.display = "flex";
+                    syncExitCdBox(); setTimeout(syncExitCdBox, 1600);                // again after the title box has finished decoding its text
+                    if (late >= 0) { exitArmedAt = exitEnd; showArmed(el, EXIT_ARMED_SHOW_MS - late); }
+                    else if (!exitTimer) exitTimer = setInterval(exitTick, 1000);
+                } else if (!exitTimer) {
+                    exitTimer = -1;          // marker only: no box and no per-second tick, but the "Cleaning" indicator still checks exitTimer
+                }
+                exitCleanTick();
+                if (!cleanTimer) cleanTimer = setInterval(exitCleanTick, 8000);
+            }
+            if (exitCdTest || !MODES.exit_helper) { start(Date.now()); return; }          // no helper entity: no countdown (start() then only drives the cleaning note)
+            fetch("/api/states/" + MODES.exit_helper, { headers: { 'Authorization': 'Bearer ' + getToken() } })
+                .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+                .then(function (d) { start(d && d.state === "on" && d.last_changed ? Date.parse(d.last_changed) : Date.now()); })
+                .catch(function () { start(Date.now()); });
+        }
+
+        function applyVideoMode(mode) {
+            const videoTarget = document.getElementById("video1");
+            let safeMode = mode ? mode.toLowerCase() : "home";
+            exitCountdown(safeMode === "exit");
+
+            if (safeMode === "home") {
+                if (!document.getElementById("photo-slider")) {
+                    videoTarget.innerHTML = "<img id='photo-slider' class='video' style='opacity: 0;'>";
+                    document.getElementById("photoname-logger").style.opacity = 0;
+                    
+                    slideshowActive = true;
+                    paused = false;
+                    updatePauseButton();
+                    changeRandomPhoto();
+                }
+            } else if (safeMode !== "unknown" && safeMode !== "unavailable") {
+                slideshowActive = false;
+                if (slideshowTimer) { clearTimeout(slideshowTimer); slideshowTimer = null; }
+                document.getElementById("markbar").style.display = "none";
+                hideDate();
+                videoTarget.innerHTML = "<video class='video' autoplay loop muted><source src='" + MODES.folder + safeMode + ".mp4?v=4' type='video/mp4'></video>";
+                
+                document.getElementById("photoname-logger").style.opacity = 1;
+                let capitalizedMode = safeMode.charAt(0).toUpperCase() + safeMode.slice(1);
+                let modeString = (safeMode === "exit") ? "Exit Mode" : "Active Mode:<br>" + capitalizedMode;
+                typePhotoName(modeString);
+            }
+        }
+
+        // ---- 5. PHOTO SLIDER LOGIC ----
+        function readTextFileAsync(file, callback) {
+            var rawFile = new XMLHttpRequest();
+            rawFile.open("GET", file, true); 
+            rawFile.setRequestHeader('Cache-Control', 'no-cache');
+            rawFile.onreadystatechange = function () {
+                if (rawFile.readyState === 4 && (rawFile.status === 200 || rawFile.status == 0)) {
+                    callback(rawFile.responseText);
+                }
+            }
+            rawFile.send(null);
+        }
+
+        var paused = false;
+        var nextDeadline = 0;
+        var remainingMs = 0;
+
+        function scheduleNext(ms) {
+            if (slideshowTimer) clearTimeout(slideshowTimer);
+            slideshowTimer = null;
+            if (!slideshowActive) return;
+            nextDeadline = Date.now() + ms;
+            if (paused) return;                                // no timer while paused; resume looks at the deadline
+            slideshowTimer = setTimeout(changeRandomPhoto, ms);
+        }
+
+        function updatePauseButton() {
+            var b = document.getElementById("nav-pause");
+            if (b) { b.className = paused ? "on" : ""; }       // latched down like a tape-deck key
+            var ind = document.getElementById("pause-indicator");
+            if (ind) ind.style.display = (paused && showPauseSymbol) ? "flex" : "none";
+            document.body.classList.toggle("pause-shown", !!(paused && showPauseSymbol));   // the counter steps aside for the pause symbol
+        }
+
+        function togglePause() {
+            if (!slideshowActive) return;
+            paused = !paused;
+            var img = document.getElementById("photo-slider");
+            var vid = document.getElementById("slide-video");
+            // Pause only holds back the NEXT item: the camera move and a playing video carry on (a video loops meanwhile).
+            if (paused) {
+                if (slideshowTimer) { clearTimeout(slideshowTimer); slideshowTimer = null; }
+                if (vid) vid.loop = true;
+            } else {
+                if (vid) vid.loop = false;
+                var left = nextDeadline - Date.now();
+                if (left <= 0) changeRandomPhoto(); else scheduleNext(left);
+            }
+            updatePauseButton();
+        }
+
+        function skipPhoto() { if (slideshowActive) changeRandomPhoto(1, true); }
+
+        function prevPhoto() {
+            if (!slideshowActive) return;
+            changeRandomPhoto(-1, true);
+        }
+
+        // ---- gestures (always active, independent of the buttons): tap = pause / play, swipe right = previous, swipe left = next ----
+        // A swipe acts as soon as the finger has moved far enough (not on lift-off), because on touch screens the browser or the
+        // dashboard may take a horizontal drag over and cancel the page's tracking before the finger is lifted.
+        (function() {
+            var sx = 0, sy = 0, st = 0, tracking = false, fired = false;
+            function begin(x, y, target) {
+                if (target && target.closest && target.closest("#markbar")) { tracking = false; return; }
+                tracking = true; fired = false; sx = x; sy = y; st = Date.now();
+            }
+            function move(x, y, ev) {
+                if (!tracking) return;
+                var dx = x - sx, dy = y - sy, adx = Math.abs(dx), ady = Math.abs(dy);
+                if (adx > 10 && adx > ady * 1.5 && ev && ev.cancelable) ev.preventDefault();      // keep the drag for us
+                if (!fired && adx >= Math.max(40, window.innerWidth * 0.12) && adx > ady * 1.5) {
+                    fired = true;
+                    if (dx > 0) prevPhoto(); else skipPhoto();
+                }
+            }
+            function end(x, y) {
+                if (!tracking) return;
+                tracking = false;
+                if (fired) return;
+                if (Math.abs(x - sx) < 12 && Math.abs(y - sy) < 12 && Date.now() - st < 600) togglePause();
+            }
+            document.addEventListener("pointerdown", function(e) { begin(e.clientX, e.clientY, e.target); });
+            document.addEventListener("pointermove", function(e) { move(e.clientX, e.clientY, e); });
+            document.addEventListener("pointerup", function(e) { end(e.clientX, e.clientY); });
+            document.addEventListener("pointercancel", function() { tracking = false; });
+            // backup path for browsers that route touches as touch events only
+            var lastTouchEnd = 0;
+            document.addEventListener("touchstart", function(e) { var t = e.touches[0]; if (t && !tracking) begin(t.clientX, t.clientY, e.target); }, { passive: true });
+            document.addEventListener("touchmove", function(e) { var t = e.touches[0]; if (t) move(t.clientX, t.clientY, e); }, { passive: false });
+            document.addEventListener("touchend", function() { tracking = false; lastTouchEnd = Date.now(); }, { passive: true });
+        })();
+
+        // ---- which elements are visible (options of the Travel Slideshow integration, delivered in the manifest) ----
+        var showPauseSymbol = true;
+        var showCounter = false;
+        function updateCounter(pos, total) {                   // small "12 / 50" in the top right corner
+            var cnt = document.getElementById("item-counter");
+            if (!cnt) return;
+            if (!showCounter || !total) { cnt.style.display = "none"; return; }
+            cnt.textContent = pos + " / " + total;
+            cnt.style.display = "block";
+        }
+        function applyShow(show) {
+            function vis(id, key) {
+                var el = document.getElementById(id);
+                if (el) el.style.display = (show[key] === false) ? "none" : "";
+            }
+            vis("photoname-logger", "title");
+            var dateEl = document.getElementById("photo-date");
+            if (dateEl && dateEl.parentNode) dateEl.parentNode.style.display = (show.date === false) ? "none" : "flex";
+            vis("nav-prev", "prev"); vis("nav-pause", "pause"); vis("nav-next", "next");
+            vis("mark-like", "like"); vis("mark-fix", "fix"); vis("mark-hide", "hide");
+            showPauseSymbol = show.pause_symbol !== false;
+            showCounter = show.counter === true;                // off unless the option is switched on
+            var cnt = document.getElementById("item-counter");
+            if (cnt && !showCounter) cnt.style.display = "none";
+            document.body.classList.toggle("nonav", show.prev === false && show.pause === false && show.next === false);
+            updatePauseButton();
+        }
+
+        function readModes(show) {                              // the optional extras from the integration options (show.modes)
+            var m = show.modes || {};
+            MODES.entity = String(m.entity || "");
+            var f = String(m.folder || "/local/webmedia/");
+            MODES.folder = f.charAt(f.length - 1) === "/" ? f : f + "/";
+            MODES.exit_helper = String(m.exit_helper || "");
+            MODES.exit_minutes = Number(m.exit_minutes) || 10;
+            MODES.clean = Array.isArray(m.clean) ? m.clean : [];
+        }
+
+        function loadManifest(callback) {
+            readTextFileAsync(MEDIA + "manifest.json?t=" + new Date().getTime(), function(text) {
+                try { var m = JSON.parse(text); readModes(m.show || {}); applyShow(m.show || {}); callback(m.items || [], m.photo_seconds || 15); } catch (e) { callback([], 15); }
+            });
+        }
+
+        // Moves through the manifest. `step` = +1 next (default), -1 previous, 0 = stay at this position (the shown item was removed).
+        // Several quick requests (fast swipes) add up and only the newest one is displayed: older ones are dropped, so there is
+        // no stack of fades fighting each other. `fast` shortens the fade for manual moves.
+        var pendingSteps = 0;
+        var navToken = 0;
+        function changeRandomPhoto(step, fast) {
+            if (typeof step !== "number") step = 1;
+            pendingSteps += step;
+            var token = ++navToken;
+            if (slideshowTimer) { clearTimeout(slideshowTimer); slideshowTimer = null; }
+            loadManifest(function(items, secs) {
+                if (token !== navToken) return;                      // replaced by a newer request
+                if (items.length === 0) { pendingSteps = 0; scheduleNext(60000); return; }
+
+                // currentPhotoIndex = index of the NEXT item; the one on screen is currentPhotoIndex - 1
+                var n = items.length;
+                if (removalPending) {                                // the item on screen was removed from the list: the next
+                    if (pendingSteps > 0) pendingSteps -= 1;         // one already sits at its position, so a forward move is one less
+                    removalPending = false;
+                }
+                var target = (currentPhotoIndex - 1) + pendingSteps;
+                pendingSteps = 0;
+                target = ((target % n) + n) % n;                     // wraps in both directions
+
+                var item = items[target];
+                currentPhotoIndex = target + 1;
+                currentItem = item;
+                updateCounter(target + 1, n);
+
+                var imgEl = document.getElementById("photo-slider");
+                if (!imgEl) return;
+                let textLogger = document.getElementById("photoname-logger");
+                let markbar = document.getElementById("markbar");
+
+                let oldVideo = document.getElementById("slide-video");
+                if (oldVideo) oldVideo.remove();
+                imgEl.style.opacity = 0;
+                if (markbar && slideshowActive) markbar.style.display = "flex";   // the bar stays visible during the change
+                fadeMarksOut();                                                   // lit keys fade out together with the picture
+                var dateEl = document.getElementById("photo-date");
+
+                setTimeout(function() {
+                    if (token !== navToken) return;                  // a newer move took over during the fade
+                    rollDate(formatTaken(item.taken) || (/^[0-9]{4}$/.test(item.year || "") ? item.year + "-xx-xx xx:xx" : ""));   // no capture time: at least the year from the folder name
+                    var timestamp = new Date().getTime();
+                    var src = MEDIA + item.file + "?t=" + timestamp;
+
+                    if (item.kind === "video") {
+                        var v = document.createElement("video");
+                        v.id = "slide-video";
+                        v.className = "video";
+                        v.muted = true;
+                        v.autoplay = true;
+                        v.playsInline = true;
+                        v.onloadedmetadata = function() {
+                            if (token !== navToken) return;
+                            scheduleNext(Math.min(v.duration || 30, 30) * 1000 + 500);
+                            if (paused) v.loop = true;
+                        };
+                        v.onerror = function() { if (token === navToken) scheduleNext(1000); };
+                        v.src = src;
+                        document.getElementById("video1").appendChild(v);
+                        fadeMarksIn(item);
+                        if (textLogger) textLogger.style.opacity = 1;
+                    } else {
+                        imgEl.onerror = function() {
+                            this.onerror = null;
+                            this.src = "data:image/gif;base64,R0lGODlhAQABAIAAABERESH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+                        };
+
+                        imgEl.onload = function() {
+                            imgEl.style.opacity = 1;
+                            fadeMarksIn(item);
+                            if (textLogger) textLogger.style.opacity = 1;
+
+                            let videoBox = document.getElementById("boxvideo");
+                            let imgRatio = imgEl.naturalWidth / imgEl.naturalHeight;
+                            let boxRatio = videoBox.clientWidth / videoBox.clientHeight;
+
+                            imgEl.style.animation = "none";
+                            void imgEl.offsetWidth;
+
+                            let isReverse = Math.random() > 0.5;
+
+                            if (imgRatio > boxRatio) {
+                                imgEl.style.animation = isReverse ? "pan-h-right " + secs + "s ease-in-out forwards" : "pan-h-left " + secs + "s ease-in-out forwards";
+                            } else {
+                                imgEl.style.animation = isReverse ? "pan-v-bottom " + secs + "s ease-in-out forwards" : "pan-v-top " + secs + "s ease-in-out forwards";
+                            }                        };
+                        imgEl.decoding = "async";                            // decode the big JPEG off the main thread
+                        imgEl.src = src;
+                        scheduleNext(secs * 1000);
+                    }
+                    if (markbar && slideshowActive) markbar.style.display = "flex";
+
+                    // the exact date is drawn at the bottom of the photo, so the "Date:" line is left out of the title box
+                    decodeTitle((item.lines || []).filter(function(l) { return l.indexOf("Date:") !== 0 && l.indexOf("Year:") !== 0; }).map(function(l) { return l.replace(/^Location:\s*/, ""); }).join("\n"));   // date and year are shown in the date box instead
+                }, fast ? 350 : 1500);
+            });
+        }
+
+        // ---- 5b. MARKS: like / fix / never show ----
+        function flashMark(mark, ok) {
+            var b = document.getElementById("mark-" + mark);
+            if (!b) return;
+            b.style.background = ok ? "rgba(243,156,15,0.45)" : "rgba(192,57,43,0.6)";
+            b.style.color = "rgb(243,156,15)";
+            setTimeout(function() { b.style.background = ""; b.style.color = ""; }, 1200);
+        }
+
+        // ---- date box: digits roll to their new value (odometer style) and the box stays on screen ----
+        // The time digits (HH:MM) roll much longer than the date digits, through several full turns of 0-9: the more precise the
+        // part, the harder it is to read before it settles (minutes longest).
+        var DATE_TEMPLATE = "dddd-dd-dd dd:dd";
+        var dateBuilt = false;
+        var ROLL_MS = { date: 1200, hour: 2800, minute: 3800 };
+        var DASH_IDX = 20;                     // strip (top to bottom): 0-9 (long-roll turn), 0-9 (short-roll turn), "-" at 20, 0-9 = resting digits at 21-30
+        var REST_BASE = 21;
+        // Row height in WHOLE pixels: with fractional heights (1.3em) the digit columns end up half a pixel apart after rolling.
+        function rowH() {
+            var el = document.getElementById("photo-date");
+            var fs = parseFloat(getComputedStyle(el).fontSize) || 14;
+            var h = Math.max(8, Math.round(fs * 1.3));
+            el.style.setProperty("--dh", h + "px");
+            return h;
+        }
+
+        function buildDate() {
+            var el = document.getElementById("photo-date");
+            if (!el || dateBuilt) return;
+            var strip = "";
+            for (var t = 0; t < 2; t++) for (var d = 0; d <= 9; d++) strip += "<span>" + d + "</span>";
+            strip += "<span>-</span>";                           // index 20 = "no date" placeholder
+            for (var e = 0; e <= 9; e++) strip += "<span>" + e + "</span>";   // resting digits
+            var html = "";
+            for (var i = 0; i < DATE_TEMPLATE.length; i++) {
+                var c = DATE_TEMPLATE.charAt(i);
+                html += c === "d" ? "<span class='dslot'><span class='dstrip' style='transform:translateY(" + (-DASH_IDX * rowH()) + "px)'>" + strip + "</span></span>"
+                                  : "<span class='dsep'>" + (c === " " ? "&nbsp;" : c) + "</span>";
+            }
+            el.innerHTML = html;
+            var strips = el.querySelectorAll(".dstrip");
+            for (var s = 0; s < strips.length; s++) {
+                strips[s].dataset.rest = DASH_IDX;
+                strips[s].addEventListener("transitionend", function(ev) {     // after a long roll, jump back to the same digit at the top
+                    if (ev.propertyName !== "transform") return;
+                    var st = ev.currentTarget, dur = st.style.transitionDuration;
+                    st.style.transitionDuration = "0s";
+                    st.style.transform = "translateY(" + (-parseInt(st.dataset.rest, 10) * rowH()) + "px)";
+                    void st.offsetWidth;
+                    st.style.transitionDuration = dur;
+                });
+            }
+            dateBuilt = true;
+        }
+
+        function rollDate(text) {                              // text "YYYY-MM-DD HH:MM", or "" for dashes
+            var el = document.getElementById("photo-date");
+            if (!el) return;
+            buildDate();
+            el.style.opacity = 1;
+            var strips = el.querySelectorAll(".dstrip");
+            var k = 0;
+            for (var i = 0; i < DATE_TEMPLATE.length; i++) {
+                if (DATE_TEMPLATE.charAt(i) !== "d") continue;
+                var ch = text ? text.charAt(i) : "";
+                var isDigit = /\d/.test(ch);
+                var digit = isDigit ? parseInt(ch, 10) : 0;
+                var rest = isDigit ? REST_BASE + digit : DASH_IDX;
+                var part = k >= 10 ? "minute" : (k >= 8 ? "hour" : "date");        // k: 0-3 year, 4-5 month, 6-7 day, 8-9 hour, 10-11 minute
+                // always roll DOWN: the strip moves down to a LOWER index; time digits go to the top turn (longest way), date digits to the middle one
+                var target = !isDigit ? DASH_IDX : (part === "date" ? 10 + digit : digit);
+                var st = strips[k];
+                st.dataset.rest = rest;
+                st.style.transitionDuration = ROLL_MS[part] + "ms";
+                st.style.transitionDelay = (k * 70) + "ms";
+                st.style.transform = "translateY(" + (-target * rowH()) + "px)";
+                k++;
+            }
+        }
+
+        function hideDate() {
+            var el = document.getElementById("photo-date");
+            if (el) el.style.opacity = 0;
+        }
+
+        var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        function formatTaken(taken) {              // "2022-08-14 17:31:06" -> "2022-08-14 17:31" (digits only, as the dseg7 font has no brackets)
+            var m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})/.exec(taken || "");
+            if (!m) return "";
+            return m[1] + "-" + m[2] + "-" + m[3] + " " + m[4] + ":" + m[5];
+        }
+
+        // Lit keys (liked / fix / never-show) fade out with the picture and the liked state fades in with the next one, in sync
+        // with the 1.5 s photo fade. The slow transition is only active during a slide change (class "slidefade"), so a press
+        // still lights the key quickly.
+        var slideFadeTimer = null;
+        function fadeMarksOut() {
+            var bar = document.getElementById("markbar");
+            if (bar) bar.classList.add("slidefade");
+            if (slideFadeTimer) { clearTimeout(slideFadeTimer); slideFadeTimer = null; }
+            setLikeState(false);
+        }
+        function fadeMarksIn(item) {
+            var bar = document.getElementById("markbar");
+            if (bar) bar.classList.add("slidefade");
+            setLikeState(!!item.liked);
+            if (slideFadeTimer) clearTimeout(slideFadeTimer);
+            slideFadeTimer = setTimeout(function() { if (bar) bar.classList.remove("slidefade"); slideFadeTimer = null; }, 1700);
+        }
+
+        // The heart stays lit for a liked item. Fix / never-show light up when pressed and stay lit until the next slide
+        // (that item is then gone from the manifest); all three are reset at every slide change.
+        function setLikeState(on) {
+            var like = document.getElementById("mark-like");
+            if (like) like.className = on ? "on" : "";
+            ["fix", "hide"].forEach(function(m) { var b = document.getElementById("mark-" + m); if (b) b.className = ""; });
+        }
+
+        var removalPending = false;   // the item on screen was removed from the manifest: the next forward move must not skip one
+
+        function markItem(mark) {
+            if (!currentItem) return;
+            var item = currentItem;
+            var flag = mark === "like" ? "liked" : (mark === "fix" ? "fixedFlag" : "hiddenFlag");
+            if (item[flag]) return;                             // already marked: it stays lit
+            fetch("/api/services/photo_slideshow/mark", {
+                method: "POST",
+                headers: { "Authorization": "Bearer " + getToken(), "Content-Type": "application/json" },
+                body: JSON.stringify({ mark: mark, id: item.id })
+            })
+            .then(function(response) {
+                if (!response.ok) throw new Error(response.status);
+                item[flag] = true;
+                var b = document.getElementById("mark-" + mark);
+                if (currentItem === item && b) b.className = "on";
+                if (mark !== "like") removalPending = true;
+            })
+            .catch(function(error) {
+                console.error("Mark failed:", error);
+                flashMark(mark, false);
+            });
+        }
+
+        // ---- title box: stays on screen; the text "decodes" (random characters lock in from left to right) ----
+        var decodeTimer = null;
+        function decodeTitle(text) {
+            var el = document.getElementById("photoname-text");
+            var cursor = document.getElementById("photoname-cursor");
+            var logger = document.getElementById("photoname-logger");
+            if (!el) return;
+            if (photoNameTimeout) { clearTimeout(photoNameTimeout); photoNameTimeout = null; }
+            if (decodeTimer) { clearInterval(decodeTimer); decodeTimer = null; }
+            if (cursor) cursor.style.display = "none";
+            if (logger) logger.style.opacity = text ? 1 : 0;
+            if (!text) { el.innerHTML = ""; return; }
+            var chars = text.split("");
+            var CH = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#$%&@*+=?";
+            // Time based: the characters lock in at exactly the same pace as before (one every 80 ms after a 240 ms start), but the text
+            // is only redrawn every 80 ms instead of every 40 ms, which halves the layout and paint work on a weak tablet.
+            var t0 = performance.now();
+            function esc(c) { return c === "&" ? "&amp;" : c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === "\n" ? "<br>" : c; }
+            function draw() {
+                var frame = Math.floor((performance.now() - t0) / 40);
+                var out = "", done = true;
+                for (var i = 0; i < chars.length; i++) {
+                    var c = chars[i];
+                    if (c === " " || c === "\n" || frame >= 6 + i * 2) out += esc(c);
+                    else { done = false; out += esc(CH.charAt(Math.floor(Math.random() * CH.length))); }
+                }
+                el.innerHTML = out;
+                if (done) { clearInterval(decodeTimer); decodeTimer = null; }
+            }
+            draw();
+            decodeTimer = setInterval(draw, 80);
+        }
+
+        function typePhotoName(text) {
+            if (decodeTimer) { clearInterval(decodeTimer); decodeTimer = null; }
+            let el = document.getElementById("photoname-text");
+            let cursor = document.getElementById("photoname-cursor");
+            
+            if (photoNameTimeout) {
+                clearTimeout(photoNameTimeout);
+                photoNameTimeout = null;
+            }
+
+            el.innerHTML = "";
+            cursor.style.display = "inline";
+
+            let i = 0;
+            let speed = delayInMilliseconds;
+
+            function typeWriterPhoto() {
+                if (i < text.length) {
+                    if (text.substring(i, i + 4) === "<br>") {
+                        el.innerHTML += "<br>";
+                        i += 4; 
+                    } else {
+                        el.innerHTML += text.charAt(i);
+                        i++;
+                    }
+                    photoNameTimeout = setTimeout(typeWriterPhoto, speed);
+                } else {
+                    clearTimeout(photoNameTimeout);
+                    photoNameTimeout = null;
+                    // Done typing: hide cursor (inline style so the blink animation can't override it)
+                    cursor.style.display = "none";
+                }
+            }
+            typeWriterPhoto();
+        }
+
+        // ---- 6. START EXECUTION ----
+        // Read the options first. With a mode entity set the page follows it (home = slideshow, anything else = <folder>/<mode>.mp4);
+        // without one it simply runs the slideshow.
+        function boot() {
+            var started = false;
+            function go() {
+                if (started) return;
+                started = true;
+                if (MODES.entity) pollVideoMode(); else applyVideoMode("home");
+            }
+            readTextFileAsync(MEDIA + "manifest.json?t=" + new Date().getTime(), function (text) {
+                try { readModes((JSON.parse(text).show) || {}); } catch (e) {}
+                go();
+            });
+            setTimeout(go, 4000);                                // no manifest yet (first sync not done): the slideshow retries on its own
+        }
+        if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
+
+    </script>
+    <div id="boxvideo">
+        <div id="video1"></div>
+    </div>
+        
+    <div id="photoname-logger">
+        <span id="photoname-text"></span><span id="photoname-cursor" class="typed-cursor" style="color:#fe9f2c; display:none;">&#9608;</span>
+    </div>
+
+    <style>
+        /* slideshow video: lies over the (hidden) photo, otherwise it is pushed below the visible area by the 100%-high <img> */
+        #slide-video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; background: #111111; }
+        /* same look as the bottom buttons of the climate cluster card: flat rectangles, thin dim-amber outline (off),
+           amber text + tinted fill + soft glow (on) */
+        #markbar { position: fixed; left: min(1.6vw,14px); right: min(1.6vw,14px); bottom: min(1.6vw,14px); display: none; align-items: center; justify-content: space-between; z-index: 50; pointer-events: none; }
+        #markbar .grp { display: flex; gap: min(0.9vw,8px); opacity: 0.85; pointer-events: auto; }
+        #markbar .grp:hover, #markbar .grp:active { opacity: 1; }
+        #markbar button { width: min(6.6vw,54px); height: min(5.4vw,40px); border-radius: min(1vw,6px); box-sizing: border-box; cursor: pointer; padding: 0;
+            border: 1px solid rgb(150,100,18); background: rgba(10,10,10,0.72); color: rgb(205,136,16);
+            -webkit-tap-highlight-color: transparent; transition: background .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease; }
+        @media (hover: hover) and (pointer: fine) { #markbar button:hover { color: rgb(243,156,15); border-color: rgb(243,156,15); } }
+        #markbar button svg { width: min(3.4vw,22px); height: min(3.4vw,22px); display: block; margin: auto; }
+        /* lit = solid gold key with a dark icon and a glow (clearly different from the dark, amber-outlined unlit keys) */
+        #markbar button.on { color: rgb(20,14,2); border-color: rgb(255,184,60); background: rgb(243,156,15); box-shadow: 0 0 12px rgba(243,156,15,0.75); }
+        #markbar button.on svg { filter: none; }
+        #markbar.slidefade button { transition: background 1.5s ease-in-out, border-color 1.5s ease-in-out, color 1.5s ease-in-out, box-shadow 1.5s ease-in-out; }
+        #mark-like.on svg path { fill: currentColor; }
+        #markbar #mark-fix svg { width: min(4vw,26px); height: min(4vw,26px); }
+        /* no navigation keys: the date moves to the left and the three mark keys are 50% larger */
+        body.nonav .datewrap { justify-content: flex-start !important; padding-left: min(1.6vw,14px); box-sizing: border-box; }
+        body.nonav #markbar button { width: min(9.9vw,81px); height: min(8.1vw,60px); }
+        body.nonav #markbar button svg { width: min(5.1vw,33px); height: min(5.1vw,33px); }
+        body.nonav #markbar #mark-fix svg { width: min(6vw,39px); height: min(6vw,39px); }
+        body.nonav #photo-date { height: min(8.1vw,60px) !important; font-size: min(3.15vw,21px) !important; padding: 0 min(2.7vw,27px) !important; border-radius: min(1.5vw,9px) !important; }
+        html, body { touch-action: none; }
+        /* title box: colours of the Dash3 weekday header (other days = box, current day = text) */
+        #photoname-logger { top: 8px !important; background-color: rgba(53,34,3,0.88) !important; color: rgb(243,156,15) !important;
+            border: 1px solid rgba(130,86,15,0.6); text-shadow: 0 0 6px rgba(243,156,15,0.8); }
+    </style>
+    <div class="datewrap" style="position:fixed; left:0; right:0; bottom:min(1.6vw,14px); display:flex; justify-content:center; z-index:40; pointer-events:none;">
+        <div id="photo-date" style="opacity:0; transition:opacity 0.5s; color:#f39c0f; font-size:min(2.1vw,14px); letter-spacing:0.06em;
+             font-family:'dseg7', monospace; height:min(5.4vw,40px); box-sizing:border-box; display:flex; align-items:center; padding:0 min(1.8vw,18px); border-radius:min(1.6vw,8px);
+             background-color:rgba(53,34,3,0.88); border:1px solid rgba(130,86,15,0.6);
+             text-shadow:0 0 6px rgba(243,156,15,0.8);"></div>
+    </div>
+    <style>
+        #photo-date .dslot { display:inline-block; height:var(--dh,18px); line-height:var(--dh,18px); overflow:hidden; }
+        #photo-date .dstrip { display:flex; flex-direction:column; transition:transform 1.2s cubic-bezier(.2,.75,.2,1); will-change: transform; }
+        #photo-date .dstrip span { display:block; height:var(--dh,18px); line-height:var(--dh,18px); text-align:center; }
+        #photo-date .dsep { display:inline-block; height:var(--dh,18px); line-height:var(--dh,18px); }
+    </style>
+    <style>
+        #item-counter { position: fixed; top: min(2.4vw,18px); right: min(3vw,22px); display: none; z-index: 60; pointer-events: none; font: min(2.6vw,11px)/1 sans-serif; letter-spacing: 0.05em; color: rgba(243,156,15,0.75); text-shadow: 0 0 3px rgba(0,0,0,0.9); }
+        body.pause-shown #item-counter { right: calc(min(3vw,22px) + min(2.4vw,9px) * 2 + min(1.2vw,7px) + 12px); }
+        #pause-indicator { position: fixed; top: min(2.4vw,18px); right: min(3vw,22px); display: none; gap: min(1.2vw,7px); z-index: 60; pointer-events: none;
+                           animation: pause-breathe 3.2s ease-in-out infinite; will-change: transform, opacity; }
+        /* the glow is a plain box-shadow now: a CSS filter on an animated element is re-rendered on every frame, a box-shadow is drawn once */
+        #pause-indicator span { display: block; width: min(2.4vw,9px); height: min(8vw,30px); border-radius: 3px; box-sizing: border-box; background: rgba(53,34,3,0.88); border: 1px solid rgba(243,156,15,0.55); box-shadow: 0 0 5px rgba(243,156,15,0.45); }
+        @keyframes pause-breathe { 0%, 100% { opacity: 0.15; transform: scale(0.9); } 50% { opacity: 0.9; transform: scale(1.05); } }
+    </style>
+    <style>
+        /* exit countdown: no box, just glowing clock digits that flip (dseg7, like the date clock) */
+        /* mirror of the "Exit Mode" title box (top 8px, 10px from the left edge): same top, 10px from the right edge; the height is synced in JS */
+        #exit-cd { position: fixed; top: 8px; right: 10px; display: none; align-items: center; z-index: 60; pointer-events: none;
+                   font-family: 'dseg7', monospace; font-size: 10px; line-height: 1; color: rgb(243,156,15); letter-spacing: 0.04em;
+                   text-shadow: 0 0 6px rgba(243,156,15,0.8); transition: opacity 1.2s ease;
+                   /* same box colours as the "Exit Mode" title box at the top left */
+                   background-color: rgba(53,34,3,0.88); border: 1px solid rgba(130,86,15,0.6); border-radius: 8px;
+                   padding: 8px 12px; box-sizing: border-box; }
+        /* label: same font and size as the "Exit Mode" title box */
+        #exit-cd .cdlab { font-family: "C64 Pro Mono Local", monospace; font-size: 10px; letter-spacing: 0; margin-right: 10px; white-space: nowrap; text-shadow: 0 0 6px rgba(243,156,15,0.8); }
+        #exit-cd .cdbody { display: inline-flex; align-items: center; font-size: 10px; }   /* same size as the "Armed in:" label */
+        /* flip-clock digit: two static halves plus two flaps that turn over (compositor-friendly transforms, no blinking) */
+        #exit-cd .fd { display: inline-block; position: relative; width: 0.8em; height: 1.3em; margin: 0 1px; perspective: 90px; }
+        #exit-cd .fd .h { position: absolute; left: 0; right: 0; height: 50%; overflow: hidden; background: rgb(46,30,4); backface-visibility: hidden; }
+        #exit-cd .fd .h > span { position: absolute; left: 0; right: 0; height: 1.3em; line-height: 1.3em; text-align: center; }
+        #exit-cd .fd .top, #exit-cd .fd .ft { top: 0; border-radius: 3px 3px 0 0; }
+        #exit-cd .fd .top > span, #exit-cd .fd .ft > span { top: 0; }
+        #exit-cd .fd .bot, #exit-cd .fd .fb { bottom: 0; border-radius: 0 0 3px 3px; }
+        #exit-cd .fd .bot > span, #exit-cd .fd .fb > span { bottom: 0; }
+        #exit-cd .fd .ft { transform-origin: 50% 100%; visibility: hidden; }
+        #exit-cd .fd .fb { transform-origin: 50% 0; transform: rotateX(90deg); visibility: hidden; }
+        #exit-cd .cdsep { display: inline-block; padding: 0 0.12em; }            /* solid colon: the old blinking one is gone */
+        #exit-cd .cdmsg { display: none; font-family: "C64 Pro Mono Local", monospace; font-size: 10px; letter-spacing: 0; white-space: nowrap; text-shadow: 0 0 6px rgba(243,156,15,0.8); }
+        #exit-cd.done .cdlab, #exit-cd.done .cdbody { display: none; }
+        #exit-cd.done .cdmsg { display: inline; }
+    </style>
+    <style>
+        /* same box colours, font and size as the Exit Mode title box; sits just below it */
+        #exit-clean { position: fixed; left: 10px; top: 46px; display: none; z-index: 12; pointer-events: none;
+                      font-family: "C64 Pro Mono Local", monospace; font-size: 10px; color: rgb(243,156,15);
+                      background-color: rgba(53,34,3,0.88); border: 1px solid rgba(130,86,15,0.6); border-radius: 8px;
+                      padding: 8px 12px; text-shadow: 0 0 6px rgba(243,156,15,0.8); white-space: nowrap; }
+        #exit-clean::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 8px; border-radius: 50%;
+                             background: rgb(243,156,15); box-shadow: 0 0 6px rgba(243,156,15,0.9); animation: cd-clean 1.6s ease-in-out infinite; vertical-align: middle; }
+        @keyframes cd-clean { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
+    </style>
+    <div id="exit-clean">Cleaning: in progress</div>
+    <div id="exit-cd"></div>
+    <div id="pause-indicator"><span></span><span></span></div>
+    <div id="item-counter"></div>
+    <div id="markbar">
+        <div class="grp">
+        <button id="nav-prev" class="" title="Previous photo" onclick="prevPhoto()"><svg viewBox="0 0 24 24"><path d="M12 5v14L2.5 12zM21.5 5v14L12 12z" fill="currentColor"/></svg></button>
+        <button id="nav-pause" class="" title="Pause / play" onclick="togglePause()"><svg viewBox="0 0 24 24"><path d="M7 4h3.5v16H7zM13.5 4H17v16h-3.5z" fill="currentColor"/></svg></button>
+        <button id="nav-next" class="" title="Next photo" onclick="skipPhoto()"><svg viewBox="0 0 24 24"><path d="M2.5 5v14L12 12zM12 5v14l9.5-7z" fill="currentColor"/></svg></button>
+        </div>
+        <div class="grp">
+        <button id="mark-like" class="" title="Like" onclick="markItem('like')"><svg viewBox="0 0 24 24"><path d="M12 20.5l-1.4-1.3C5.5 14.6 2.5 11.8 2.5 8.4 2.5 5.7 4.6 3.6 7.3 3.6c1.7 0 3.4.8 4.7 2.2 1.3-1.4 3-2.2 4.7-2.2 2.7 0 4.8 2.1 4.8 4.8 0 3.4-3 6.2-8.1 10.8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
+        <button id="mark-fix" class="" title="Fix or delete" onclick="markItem('fix')"><svg viewBox="0 0 24 24"><path fill="currentColor" fill-rule="evenodd" d="M12 2L1 21H23ZM12 6L19.53 19H4.47Z"/><rect x="10.7" y="9.4" width="2.6" height="5.2" rx="1.3" fill="currentColor"/><circle cx="12" cy="16.9" r="1.5" fill="currentColor"/></svg></button>
+        <button id="mark-hide" class="" title="Never show again" onclick="markItem('hide')"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4 20L20 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+        </div>
+    </div>
+
+
+
+</body>
+</html>

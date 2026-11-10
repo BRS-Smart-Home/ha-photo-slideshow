@@ -65,7 +65,12 @@
           "show_fix": "Show: fix / delete button",
           "show_hide": "Show: never-show button",
           "show_pause_symbol": "Show: pause symbol in the corner while paused",
-          "show_counter": "Show: small number of the item on screen in the top right corner (for example 12 / 50)"
+          "show_counter": "Show: small number of the item on screen in the top right corner (for example 12 / 50)",
+          "mode_entity": "Mode video: input_text entity (empty = off)",
+          "mode_folder": "Mode video: folder with one <mode>.mp4 per mode",
+          "exit_helper": "Exit countdown: input_boolean entity (empty = off)",
+          "exit_minutes": "Exit countdown: minutes until armed",
+          "clean_entities": "Exit mode: vacuum entities for \"Cleaning: in progress\" (one per line, empty = off)"
         },
         "data_description": {
           "photo_seconds": "Videos always play to their end (up to the longest video setting). A change applies from the next photo on the slideshow page.",
@@ -73,6 +78,8 @@
           "photo_formats": "File extensions separated by commas, for example: jpg, jpeg, png, heic, tif, bmp, gif",
           "video_formats": "File extensions separated by commas, for example: mp4, mov",
           "exclude_files": "Example: *_hide.* excludes IMG_1_hide.jpg. Rename a photo like that in Drive to remove it from the slideshow for good.",
+          "mode_entity": "Optional. An input_text entity, for example input_text.video_mode. While its state is home the slideshow runs; for any other state (coffee, exit, sleep ...) the page plays <folder>/<state>.mp4 in a loop instead.",
+          "exit_helper": "Optional. While this input_boolean is on and the mode is exit, the page shows a flip-clock countdown.",
           "report_notify": "An e-mail address (the report is e-mailed there) or a notify service such as notify.mobile_app_phone. Leave empty to send no report."
         }
       }

@@ -25,6 +25,11 @@ from .const import (
     OPT_MAX_VIDEO_SECONDS,
     OPT_PHOTO_SECONDS,
     OPT_PHOTOS_PER_DAY,
+    OPT_CLEAN_ENTITIES,
+    OPT_EXIT_HELPER,
+    OPT_EXIT_MINUTES,
+    OPT_MODE_ENTITY,
+    OPT_MODE_FOLDER,
     OPT_PHOTO_FORMATS,
     OPT_REPORT_NOTIFY,
     OPT_REPORT_TIME,
@@ -183,6 +188,11 @@ class TravelSlideshowOptionsFlow(OptionsFlow):
                 OPT_REPORT_TIME: user_input[OPT_REPORT_TIME],
                 OPT_REPORT_NOTIFY: _parse_lines(user_input[OPT_REPORT_NOTIFY]),
                 OPT_FAILS_BEFORE_PUSH: int(user_input[OPT_FAILS_BEFORE_PUSH]),
+                OPT_MODE_ENTITY: str(user_input.get(OPT_MODE_ENTITY, "")).strip(),
+                OPT_MODE_FOLDER: str(user_input.get(OPT_MODE_FOLDER, "")).strip() or "/local/webmedia/",
+                OPT_EXIT_HELPER: str(user_input.get(OPT_EXIT_HELPER, "")).strip(),
+                OPT_EXIT_MINUTES: int(user_input.get(OPT_EXIT_MINUTES, 10)),
+                OPT_CLEAN_ENTITIES: _parse_lines(user_input.get(OPT_CLEAN_ENTITIES, "")),
                 **{show_option(k): bool(user_input.get(show_option(k), True)) for k in SHOW_KEYS},
             }
             return self.async_create_entry(data=out)
@@ -203,5 +213,10 @@ class TravelSlideshowOptionsFlow(OptionsFlow):
             vol.Required(OPT_REPORT_NOTIFY, default=_lines(cur[OPT_REPORT_NOTIFY])): _TEXT_BOX,
             vol.Required(OPT_FAILS_BEFORE_PUSH, default=cur[OPT_FAILS_BEFORE_PUSH]): _num(1, 10),
             **{vol.Required(show_option(k), default=bool(cur[show_option(k)])): selector.BooleanSelector() for k in SHOW_KEYS},
+            vol.Optional(OPT_MODE_ENTITY, description={"suggested_value": cur[OPT_MODE_ENTITY]}): selector.TextSelector(),
+            vol.Optional(OPT_MODE_FOLDER, description={"suggested_value": cur[OPT_MODE_FOLDER]}): selector.TextSelector(),
+            vol.Optional(OPT_EXIT_HELPER, description={"suggested_value": cur[OPT_EXIT_HELPER]}): selector.TextSelector(),
+            vol.Required(OPT_EXIT_MINUTES, default=cur[OPT_EXIT_MINUTES]): _num(1, 120, 1, "min"),
+            vol.Optional(OPT_CLEAN_ENTITIES, description={"suggested_value": _lines(cur[OPT_CLEAN_ENTITIES])}): _TEXT_BOX,
         })
         return self.async_show_form(step_id="init", data_schema=schema)
