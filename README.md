@@ -21,7 +21,8 @@
 | 0.3 | Marks (like / fix / never show) with services and a daily e-mail report with Drive links; the old `sync_photos.sh` script was removed (cut-over done). |
 | 0.4 | Options: seconds per photo, show / hide every element of the slideshow page (navigation keys off by default); manifest carries capture time, path and the options; marks also work for items no longer in the library; "Send report now" (does not clear the list, only the scheduled report does). |
 | 0.5.0 | Sensors: unique photos / videos shown (ever) and photos / videos still to show in this cycle. |
-| **0.6.0** (this) | New option "Show: item counter": a small `12 / 50` in the top right corner of the slideshow page (off by default). |
+| 0.6.0 | New option "Show: item counter": a small `12 / 50` in the top right corner of the slideshow page (off by default). |
+| **0.6.1** (this) | Release version bump for the HACS download (no code change since 0.6.0). |
 
 The slideshow page itself (`index.html`, gestures, gold dash styling, rolling date) lives in the Home Assistant config repo (`ha-config`, `www/index.html`).
 
