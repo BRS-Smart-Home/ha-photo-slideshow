@@ -27,11 +27,11 @@ OPT_REPORT_NOTIFY = "report_notify"           # list of notify service names, e.
 OPT_FAILS_BEFORE_PUSH = "fails_before_push"
 
 # Elements of the slideshow page that can be shown or hidden one by one (option name = "show_" + key; all visible by default)
-SHOW_KEYS = ("title", "date", "prev", "pause", "next", "like", "fix", "hide", "pause_symbol")
+SHOW_KEYS = ("title", "date", "prev", "pause", "next", "like", "fix", "hide", "pause_symbol", "counter")
 
 
 # The page is operated by tapping (pause / play) and swiping (next / previous), so the three navigation keys are off by default.
-HIDDEN_BY_DEFAULT = ("prev", "pause", "next")
+HIDDEN_BY_DEFAULT = ("prev", "pause", "next", "counter")
 
 
 def show_option(key: str) -> str:

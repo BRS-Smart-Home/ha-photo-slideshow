@@ -448,7 +448,7 @@ def test_manifest_carries_the_show_options_and_nav_keys_are_hidden_by_default():
     assert m["photo_seconds"] == 12 and m["show"] == {"date": False, "like": True}
     assert manifest_out.build_manifest([(it, "1_x.jpg")])["show"] == {}                 # no options: the page shows everything
     for k in const.SHOW_KEYS:
-        assert const.DEFAULT_OPTIONS[const.show_option(k)] is (k not in ("prev", "pause", "next")), k
+        assert const.DEFAULT_OPTIONS[const.show_option(k)] is (k not in ("prev", "pause", "next", "counter")), k
 
 
 def test_path_from_local_name_recovers_a_readable_drive_path():

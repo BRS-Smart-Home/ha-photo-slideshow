@@ -20,7 +20,8 @@
 | 0.2 | Nightly sync into `www/slideshow`: 47 photos + 3 videos, equal chance for every unused item, photos at original size (HEIC/TIFF/BMP/GIF become JPG), videos cut at 30 s and converted to a small MP4, `manifest.json`, failed items replaced, repair + event on errors, push after 2 failed syncs. |
 | 0.3 | Marks (like / fix / never show) with services and a daily e-mail report with Drive links; the old `sync_photos.sh` script was removed (cut-over done). |
 | 0.4 | Options: seconds per photo, show / hide every element of the slideshow page (navigation keys off by default); manifest carries capture time, path and the options; marks also work for items no longer in the library; "Send report now" (does not clear the list, only the scheduled report does). |
-| **0.5.0** (this) | Sensors: unique photos / videos shown (ever) and photos / videos still to show in this cycle. |
+| 0.5.0 | Sensors: unique photos / videos shown (ever) and photos / videos still to show in this cycle. |
+| **0.6.0** (this) | New option "Show: item counter": a small `12 / 50` in the top right corner of the slideshow page (off by default). |
 
 The slideshow page itself (`index.html`, gestures, gold dash styling, rolling date) lives in the Home Assistant config repo (`ha-config`, `www/index.html`).
 

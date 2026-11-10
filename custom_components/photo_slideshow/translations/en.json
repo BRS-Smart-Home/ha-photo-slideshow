@@ -64,7 +64,8 @@
           "show_like": "Show: like button",
           "show_fix": "Show: fix / delete button",
           "show_hide": "Show: never-show button",
-          "show_pause_symbol": "Show: pause symbol in the corner while paused"
+          "show_pause_symbol": "Show: pause symbol in the corner while paused",
+          "show_counter": "Show: small number of the item on screen in the top right corner (for example 12 / 50)"
         },
         "data_description": {
           "photo_seconds": "Videos always play to their end (up to the longest video setting). A change applies from the next photo on the slideshow page.",
