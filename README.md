@@ -23,7 +23,8 @@
 | 0.5.0 | Sensors: unique photos / videos shown (ever) and photos / videos still to show in this cycle. |
 | 0.6.0 | New option "Show: item counter": a small `12 / 50` in the top right corner of the slideshow page (off by default). |
 | 0.6.1 | Release version bump for the HACS download (no code change since 0.6.0). |
-| **0.7.0** (this) | The slideshow page now ships with the integration at `/photo_slideshow/index.html` and updates with it. Optional extras (mode videos, exit countdown, cleaning note) are options, off by default. |
+| 0.7.0 | The slideshow page now ships with the integration at `/photo_slideshow/index.html` and updates with it. Optional extras (mode videos, exit countdown, cleaning note) are options, off by default. |
+| **0.7.1** (this) | The page passes its `?number` on to its style sheet, so raising the number in the dashboard URL refreshes both after an update. |
 
 ## Show the slideshow
 
@@ -36,7 +37,7 @@ aspect_ratio: 56%
 ```
 
 or open `http://<your-home-assistant>:8123/photo_slideshow/index.html` full screen (a kiosk tablet, for example). The page is never
-cached for long, so an update of the integration reaches every screen after a reload.
+cached for long, but some kiosk browsers keep a copy anyway: put a number behind the address (`/photo_slideshow/index.html?1`) and raise it after every update of the integration, which then also refreshes the style sheet.
 
 The page shows today's items (written to `/config/www/slideshow` by the nightly sync) with gestures: **tap** = pause / play,
 **swipe** = next / previous. The like / fix / never-show buttons need to talk to Home Assistant: inside a dashboard card the page

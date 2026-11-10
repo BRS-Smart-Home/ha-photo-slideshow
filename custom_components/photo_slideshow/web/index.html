@@ -5,7 +5,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Travel Slideshow</title>
-    <link rel="stylesheet" href="style.css">
+    <!-- style.css gets the same ?number as this page, so raising the number in the dashboard URL (index.html?953 -> ?954) refreshes the style sheet too -->
+    <script>document.write('<link rel="stylesheet" href="style.css' + location.search.replace(/[^?&=0-9A-Za-z._-]/g, "") + '">');</script>
     <!-- optional: your own overrides and fonts (for example a @font-face for "C64 Pro Mono Local"); a missing file is harmless -->
     <link rel="stylesheet" href="/local/slideshow_custom.css">
 </head>
