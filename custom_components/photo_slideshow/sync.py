@@ -8,8 +8,9 @@ import random
 from dataclasses import dataclass, field
 from typing import Awaitable, Callable, Iterable, Mapping
 
-from .const import KIND_PHOTO, KIND_VIDEO
+from .const import KIND_PHOTO, KIND_VIDEO, SORT_RANDOM, SORT_TAKEN_ASC, SORT_TAKEN_DESC
 from .library import Item, pick
+from .title import taken_text
 
 # fetch(item, counter) -> local file name; raises on any problem (download, conversion, too big ...)
 Fetch = Callable[[Item, int], Awaitable[str]]
@@ -19,7 +20,7 @@ MAX_ATTEMPT_FACTOR = 3          # per kind we try at most 3x the wanted number o
 
 @dataclass
 class DayResult:
-    done: list[tuple[Item, str]] = field(default_factory=list)       # photos first, then videos, in show order
+    done: list[tuple[Item, str]] = field(default_factory=list)       # in show order (photos and videos mixed randomly)
     failed: list[dict] = field(default_factory=list)                  # {"id", "path", "error"}
     cycle_reset: dict[str, bool] = field(default_factory=lambda: {KIND_PHOTO: False, KIND_VIDEO: False})
     short: dict[str, int] = field(default_factory=lambda: {KIND_PHOTO: 0, KIND_VIDEO: 0})
@@ -33,6 +34,7 @@ async def build_day(
     targets: Mapping[str, int],
     fetch: Fetch,
     rng: random.Random | None = None,
+    order: str = SORT_RANDOM,
 ) -> DayResult:
     """Fetch `targets[kind]` items per kind; an item that fails is replaced by another random unused one.
 
@@ -62,8 +64,13 @@ async def build_day(
                 res.done.append((item, fname))
                 res.ids[kind].append(item.id)
         res.short[kind] = want - len(res.ids[kind])
-    # keep photos first, then videos, whatever the order of completion
-    res.done.sort(key=lambda e: 0 if e[0].kind == KIND_PHOTO else 1)
+    # photos and videos are mixed (not videos at the end): randomly, or by the date they were taken
+    rng.shuffle(res.done)
+    if order in (SORT_TAKEN_ASC, SORT_TAKEN_DESC):
+        known = [e for e in res.done if taken_text(e[0].meta)]
+        unknown = [e for e in res.done if not taken_text(e[0].meta)]       # no date: always at the end
+        known.sort(key=lambda e: taken_text(e[0].meta), reverse=(order == SORT_TAKEN_DESC))
+        res.done = known + unknown
     return res
 
 

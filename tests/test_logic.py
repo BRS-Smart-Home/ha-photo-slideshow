@@ -426,6 +426,23 @@ def test_day_needs_half_of_the_photos_but_videos_are_optional():
     assert sync.day_is_acceptable(res, {"photo": 10, "video": 3})[0] and res.short["video"] == 3
 
 
+def test_order_mixed_and_by_date_taken():
+    async def fetch(item, n):
+        return f"{n}.jpg"
+    lib = lib_of(30, 6)
+    for i, it in enumerate(lib.values()):
+        it.meta = {"time": f"2020:01:{(i % 28) + 1:02d} 10:00:00"} if i % 7 else {}
+    t = {"photo": 20, "video": 5}
+    res = run(sync.build_day(lib, empty_used(), set(), t, fetch, random.Random(8)))
+    kinds = [it.kind for it, _ in res.done]
+    assert kinds != sorted(kinds, key=lambda k: k == "video")        # videos are not all at the end
+    for order, rev in (("taken_asc", False), ("taken_desc", True)):
+        res = run(sync.build_day(lib, empty_used(), set(), t, fetch, random.Random(8), order=order))
+        stamps = [title.taken_text(it.meta) for it, _ in res.done]
+        known = [x for x in stamps if x]
+        assert known == sorted(known, reverse=rev) and stamps[:len(known)] == known    # undated items last
+
+
 def test_local_copy_extensions():
     assert [sync.photo_target_ext(e) for e in ("JPG", "jpeg", "png", "heic", "tif", "bmp", "gif")] == \
         ["jpg", "jpeg", "png", "jpg", "jpg", "jpg", "jpg"]

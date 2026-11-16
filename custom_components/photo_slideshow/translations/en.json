@@ -46,6 +46,8 @@
           "videos_per_day": "Videos per day",
           "max_video_seconds": "Longest video",
           "max_video_mb": "Largest video file",
+          "video_height": "Video resolution when resizing (videos already H.264 and small enough are copied unchanged)",
+          "sort_order": "Slideshow order (items without a date taken go last when sorting by date)",
           "exclude_folders": "Folders to exclude (any level)",
           "exclude_files": "File-name patterns to exclude",
           "photo_formats": "Photo formats",

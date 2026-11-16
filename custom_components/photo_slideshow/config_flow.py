@@ -38,6 +38,8 @@ from .const import (
     OPT_SYNC_TIME,
     OPT_VIDEOS_PER_DAY,
     OPT_VIDEO_FORMATS,
+    OPT_VIDEO_HEIGHT,
+    OPT_SORT_ORDER,
     SHOW_KEYS,
     show_option,
 )
@@ -162,6 +164,14 @@ def _num(min_: float, max_: float, step: float = 1, unit: str | None = None) -> 
 
 
 _TEXT_BOX = selector.TextSelector(selector.TextSelectorConfig(multiline=True))
+_SORT_ORDERS = selector.SelectSelector(selector.SelectSelectorConfig(
+    options=[{"value": "random", "label": "Random (default)"}, {"value": "taken_asc", "label": "Date taken, oldest first"},
+             {"value": "taken_desc", "label": "Date taken, newest first"}],
+    mode=selector.SelectSelectorMode.DROPDOWN))
+_VIDEO_HEIGHTS =selector.SelectSelector(selector.SelectSelectorConfig(
+    options=[{"value": "480", "label": "480p"}, {"value": "720", "label": "720p (default)"},
+             {"value": "1080", "label": "1080p"}, {"value": "1440", "label": "1440p"}, {"value": "2160", "label": "2160p (4K)"}],
+    mode=selector.SelectSelectorMode.DROPDOWN))
 _WEEKDAYS = selector.SelectSelector(selector.SelectSelectorConfig(
     options=[{"value": str(i), "label": n} for i, n in enumerate(
         ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"])],
@@ -178,6 +188,8 @@ class TravelSlideshowOptionsFlow(OptionsFlow):
                 OPT_VIDEOS_PER_DAY: int(user_input[OPT_VIDEOS_PER_DAY]),
                 OPT_MAX_VIDEO_SECONDS: int(user_input[OPT_MAX_VIDEO_SECONDS]),
                 OPT_MAX_VIDEO_MB: int(user_input[OPT_MAX_VIDEO_MB]),
+                OPT_VIDEO_HEIGHT: int(user_input[OPT_VIDEO_HEIGHT]),
+                OPT_SORT_ORDER: str(user_input[OPT_SORT_ORDER]),
                 OPT_EXCLUDE_FOLDERS: _parse_lines(user_input[OPT_EXCLUDE_FOLDERS]),
                 OPT_EXCLUDE_FILES: _parse_lines(user_input[OPT_EXCLUDE_FILES]),
                 OPT_PHOTO_FORMATS: _parse_formats(user_input[OPT_PHOTO_FORMATS]),
@@ -202,6 +214,8 @@ class TravelSlideshowOptionsFlow(OptionsFlow):
             vol.Required(OPT_VIDEOS_PER_DAY, default=cur[OPT_VIDEOS_PER_DAY]): _num(0, 100),
             vol.Required(OPT_MAX_VIDEO_SECONDS, default=cur[OPT_MAX_VIDEO_SECONDS]): _num(1, 600, 1, "s"),
             vol.Required(OPT_MAX_VIDEO_MB, default=cur[OPT_MAX_VIDEO_MB]): _num(1, 2000, 1, "MB"),
+            vol.Required(OPT_VIDEO_HEIGHT, default=str(cur[OPT_VIDEO_HEIGHT])): _VIDEO_HEIGHTS,
+            vol.Required(OPT_SORT_ORDER, default=cur[OPT_SORT_ORDER]): _SORT_ORDERS,
             vol.Required(OPT_EXCLUDE_FOLDERS, default=_lines(cur[OPT_EXCLUDE_FOLDERS])): _TEXT_BOX,
             vol.Required(OPT_EXCLUDE_FILES, default=_lines(cur[OPT_EXCLUDE_FILES])): _TEXT_BOX,
             vol.Required(OPT_PHOTO_FORMATS, default=", ".join(cur[OPT_PHOTO_FORMATS])): selector.TextSelector(),

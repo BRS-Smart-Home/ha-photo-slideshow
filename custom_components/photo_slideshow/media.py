@@ -38,11 +38,35 @@ def convert_photo(src: Path, dst: Path, max_px: int) -> None:
 
 
 def _ffmpeg_cmd(ffmpeg: str, src: Path, dst: Path, seconds: int, height: int, crf: int) -> list[str]:
+    # frame rate is passed through untouched (no dropped or duplicated frames); only the size (and quality) is reduced
     return [
         ffmpeg, "-nostdin", "-y", "-v", "error", "-i", str(src), "-t", str(seconds), "-an",
-        "-vf", f"scale=-2:'min({height},ih)'", "-c:v", "libx264", "-preset", "veryfast", "-crf", str(crf),
+        "-vf", f"scale=-2:'min({height},ih)'", "-fps_mode", "passthrough",
+        "-c:v", "libx264", "-preset", "fast", "-crf", str(crf),
         "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(dst),
     ]
+
+
+def _copy_cmd(ffmpeg: str, src: Path, dst: Path, seconds: int) -> list[str]:
+    """No re-encode at all: same video stream, muted, cut at `seconds`, moved into an MP4 container."""
+    return [
+        ffmpeg, "-nostdin", "-y", "-v", "error", "-i", str(src), "-t", str(seconds), "-an",
+        "-c:v", "copy", "-movflags", "+faststart", str(dst),
+    ]
+
+
+async def _is_h264(ffmpeg: str, src: Path) -> bool:
+    """True when the first video stream is 8-bit H.264 (plays everywhere, can be copied as is)."""
+    ffprobe = shutil.which("ffprobe") or str(Path(ffmpeg).with_name("ffprobe"))
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            ffprobe, "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name,pix_fmt",
+            "-of", "csv=p=0", str(src), stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
+        out, _ = await asyncio.wait_for(proc.communicate(), 30)
+    except (OSError, asyncio.TimeoutError):
+        return False
+    parts = out.decode(errors="replace").strip().split(",")
+    return parts[0] == "h264" and (len(parts) < 2 or parts[1] in ("yuv420p", "yuvj420p"))
 
 
 async def _run(cmd: list[str], timeout: int) -> None:
@@ -57,13 +81,26 @@ async def _run(cmd: list[str], timeout: int) -> None:
         raise RuntimeError("ffmpeg failed: " + (err or b"").decode(errors="replace").strip()[-200:])
 
 
-async def convert_video(src: Path, dst: Path, max_seconds: int, max_mb: int, timeout: int = 900) -> None:
-    """Small muted MP4 (at most 720p), cut at `max_seconds`; a second, smaller try when the file is above `max_mb`."""
+async def convert_video(src: Path, dst: Path, max_seconds: int, max_mb: int, height: int = 720, timeout: int = 900) -> None:
+    """Muted MP4 cut at `max_seconds`. H.264 sources are copied without re-encoding; only when that is above `max_mb`
+    (or the codec is not H.264, e.g. HEVC) is the video re-encoded, with the original frame rate, in smaller steps."""
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
         raise RuntimeError("ffmpeg is not available in Home Assistant")
     limit = max_mb * 1024 * 1024
-    for height, crf in ((720, 28), (480, 34)):
+    if await _is_h264(ffmpeg, src):
+        try:
+            await _run(_copy_cmd(ffmpeg, src, dst, max_seconds), timeout)
+            if dst.stat().st_size <= limit:
+                return
+        except RuntimeError:
+            pass                                                     # fall through to a real conversion
+    # chosen resolution first, then smaller ones when the file is still above the size limit
+    steps = [(height, 24)]
+    if height > 720:
+        steps.append((720, 27))
+    steps.append((min(height, 480), 32))
+    for height, crf in steps:
         await _run(_ffmpeg_cmd(ffmpeg, src, dst, max_seconds, height, crf), timeout)
         if dst.stat().st_size <= limit:
             return

@@ -41,6 +41,8 @@ from .const import (
     OPT_EXCLUDE_FOLDERS,
     OPT_FAILS_BEFORE_PUSH,
     OPT_MAX_VIDEO_MB,
+    OPT_VIDEO_HEIGHT,
+    OPT_SORT_ORDER,
     OPT_MAX_VIDEO_SECONDS,
     OPT_PHOTO_SECONDS,
     OPT_PHOTOS_PER_DAY,
@@ -284,12 +286,12 @@ class SlideshowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         else:
                             fname = local_name(counter, item.parts, "mp4")
                             await self.drive.download_to(item.id, tmp, max_bytes=2000 * 1024 * 1024)
-                            await media.convert_video(tmp, stage / fname, int(cfg[OPT_MAX_VIDEO_SECONDS]), int(cfg[OPT_MAX_VIDEO_MB]))
+                            await media.convert_video(tmp, stage / fname, int(cfg[OPT_MAX_VIDEO_SECONDS]), int(cfg[OPT_MAX_VIDEO_MB]), int(cfg[OPT_VIDEO_HEIGHT]))
                         return fname
                     finally:
                         await self.hass.async_add_executor_job(lambda: tmp.unlink(missing_ok=True))
 
-                res = await sync_mod.build_day(self.library, self.state.used, self.state.hidden_ids(), targets, fetch)
+                res = await sync_mod.build_day(self.library, self.state.used, self.state.hidden_ids(), targets, fetch, order=str(cfg[OPT_SORT_ORDER]))
                 ok, why = sync_mod.day_is_acceptable(res, targets)
                 if not ok:
                     raise DriveError(why)

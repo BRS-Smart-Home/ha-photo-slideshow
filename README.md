@@ -18,7 +18,7 @@
 
 1. **Reads** your Google Drive photo folder (any depth of sub-folders) with a service account that can only *view* what you share with it.
 2. **Picks** a new selection every night: by default 47 photos and 3 videos. Every item you have not seen yet has the same chance, so over about a year the whole library is shown before anything repeats.
-3. **Prepares** the selection in `/config/www/slideshow`: HEIC, TIFF, BMP and GIF photos become JPG, videos are cut to 30 s and converted to a small MP4, and a `manifest.json` describes the day (title from the folder names, capture date from the photo).
+3. **Prepares** the selection in `/config/www/slideshow`: HEIC, TIFF, BMP and GIF photos become JPG, videos are cut to 30 s (and only converted when needed), and a `manifest.json` describes the day (title from the folder names, capture date from the photo).
 4. **Shows** it on a page served by the integration itself, with gestures and buttons to like a picture, flag it for fixing, or hide it for good.
 5. **Reports**: sensors for the library and the cycle, repairs and a push message when something fails, and a daily e-mail with links to the items you marked.
 
@@ -262,6 +262,8 @@ All settings are options of the integration (**Configure**).
 | Photos / videos per day | 47 / 3 | about one year for a 17,000-photo library |
 | Seconds each photo is shown | 15 | videos always play to their end |
 | Longest video / largest video file | 30 s / 60 MB | longer or bigger videos are cut or skipped |
+| Video resolution | 720p | 480p, 720p, 1080p, 1440p or 2160p: the height videos are scaled down to **when they have to be re-encoded** (see *Videos*) |
+| Slideshow order | Random | *Random*, *Date taken, oldest first* or *Date taken, newest first*. Photos and videos are mixed; items without a capture date go last when sorting by date |
 | Folders to exclude | `temp`, `tmp` | any level; plain words match whole words (`temp` does not match `Temple`); entries with `* ? [ ]` are glob patterns. One per line |
 | File-name patterns to exclude | `*_hide.*` | rename `IMG_1.jpg` to `IMG_1_hide.jpg` in Drive and it leaves the slideshow for good |
 | Photo formats | jpg, jpeg, png, heic, tif, tiff, bmp, gif | separated by commas; photos keep their original size (safety cap 8192 px) |
@@ -307,20 +309,24 @@ Other changes to photos:
 
 | Format | Supported | What happens |
 |---|---|---|
-| MP4 (H.264) | yes (default) | Re-encoded as described below |
-| MOV (iPhone, Apple) | yes (default) | Re-encoded as described below |
+| MP4 (H.264) | yes (default) | Copied without re-encoding when small enough, else re-encoded as described below |
+| MOV (iPhone, Apple) | yes (default) | H.264 is copied as is; HEVC (the iPhone default) is re-encoded as described below |
 | AVI, MKV, M4V, WebM ... | untested | Can be added in the *Video formats* option; ffmpeg reads most of them and the result is the same MP4 |
 
-Every video is **always** re-encoded by ffmpeg into a small file that plays on any tablet:
+Videos are changed as little as possible:
 
-- **Container and codec:** MP4, H.264 (`libx264`, `yuv420p`, fast start), CRF 28.
-- **Resolution:** scaled down to at most **720p** (height 720, width follows; never scaled up).
+- **H.264 (8-bit) sources are copied, not re-encoded:** same picture, same frame rate, no quality loss. Only the sound is removed and
+  the clip is cut at the length limit, in an MP4 container with fast start.
+- **Everything else (HEVC, other codecs), or a copy that is above the size limit, is re-encoded** with ffmpeg: H.264
+  (`libx264`, `yuv420p`, fast start, preset *fast*), **original frame rate kept** (no dropped or duplicated frames), never scaled up.
+- **Resolution:** the *Video resolution* option (default **720p**); the height is limited, the width follows.
 - **Sound:** **removed** (the slideshow is silent).
 - **Length:** cut after the **longest video** setting (default 30 s). A source video that Drive reports as longer than the limit is
   not picked at all; when Drive reports no length, the file is judged by its size and cut at the limit.
-- **Size:** if the result is still larger than the **largest video file** setting (default 60 MB) it is encoded once more at
-  480p and CRF 34. If it is still too big, the video is dropped for that day and replaced by another one. A source file bigger
-  than the size limit is not picked at all.
+- **Size:** if the result is above the **largest video file** setting (default 60 MB) it is encoded again at lower quality and
+  resolution: the chosen height (CRF 24), then 720p (CRF 27, only if the chosen height was higher), then 480p (CRF 32). If it is
+  still too big, the video is dropped for that day and replaced by another one. A source file bigger than the size limit is not
+  picked at all.
 
 ### If a file cannot be converted
 
@@ -396,7 +402,8 @@ instead of the iframe. Suggestions are welcome as GitHub issues.
 | 0.5.0 | Sensors: unique photos / videos shown (ever) and photos / videos still to show in this cycle. |
 | 0.6.0 | New option "Show: item counter". |
 | 0.7.0 | The slideshow page ships with the integration at `/photo_slideshow/index.html`. Optional extras (mode videos, exit countdown, cleaning note) are options, off by default. |
-| **0.7.1** | The page passes its `?number` on to its style sheet, so raising the number in the dashboard URL refreshes both after an update. |
+| 0.7.1 | The page passes its `?number` on to its style sheet, so raising the number in the dashboard URL refreshes both after an update. |
+| **0.8.0** | Videos: H.264 is copied without re-encoding, the original frame rate is kept when re-encoding (no more skipped frames), new option *Video resolution*. Photos and videos are mixed instead of videos last; new option *Slideshow order* (random, date taken ascending or descending). The "Armed Successfully" box hides the slide counter. |
 
 ## Development
 

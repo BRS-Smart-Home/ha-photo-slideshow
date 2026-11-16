@@ -15,6 +15,9 @@ OPT_PHOTO_SECONDS = "photo_seconds"           # how long the page shows each pho
 OPT_VIDEOS_PER_DAY = "videos_per_day"
 OPT_MAX_VIDEO_SECONDS = "max_video_seconds"
 OPT_MAX_VIDEO_MB = "max_video_mb"
+OPT_VIDEO_HEIGHT = "video_height"             # videos are scaled down to at most this height (px) when they have to be re-encoded
+OPT_SORT_ORDER = "sort_order"                 # order of the day's slideshow: random, or by the date taken
+SORT_RANDOM, SORT_TAKEN_ASC, SORT_TAKEN_DESC = "random", "taken_asc", "taken_desc"
 OPT_EXCLUDE_FOLDERS = "exclude_folders"
 OPT_EXCLUDE_FILES = "exclude_files"
 OPT_PHOTO_FORMATS = "photo_formats"
@@ -50,6 +53,8 @@ DEFAULT_OPTIONS: dict = {
     OPT_VIDEOS_PER_DAY: 3,
     OPT_MAX_VIDEO_SECONDS: 30,
     OPT_MAX_VIDEO_MB: 60,
+    OPT_VIDEO_HEIGHT: 720,
+    OPT_SORT_ORDER: SORT_RANDOM,
     # Folder rules apply to folder names at any level: a glob if they contain * ? [ ], else a whole-word match.
     OPT_EXCLUDE_FOLDERS: ["temp", "tmp"],
     OPT_EXCLUDE_FILES: ["*_hide.*"],

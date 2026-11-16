@@ -135,10 +135,11 @@
         // countdown reached zero: "Armed Successfully" for 10 s, then fade out and stop ticking
         function showArmed(el, msLeft) {
             el.classList.add("done");
+            document.body.classList.add("armed-shown");                             // hides the slide counter while the box is up
             if (exitHideTimer) clearTimeout(exitHideTimer);
             exitHideTimer = setTimeout(function () {
                 el.style.opacity = "0";                                             // fades via the CSS transition
-                exitHideTimer = setTimeout(function () { el.style.display = "none"; exitHideTimer = null; }, 1400);
+                exitHideTimer = setTimeout(function () { el.style.display = "none"; document.body.classList.remove("armed-shown"); exitHideTimer = null; }, 1400);
             }, Math.max(0, msLeft));
             if (exitTimer && exitTimer !== -1) { clearInterval(exitTimer); }
             exitTimer = -1;                                                         // marker only: the "Cleaning" indicator still checks exitTimer
@@ -195,6 +196,7 @@
                 if (cleanTimer) { clearInterval(cleanTimer); cleanTimer = null; }
                 if (exitHideTimer) { clearTimeout(exitHideTimer); exitHideTimer = null; }
                 el.style.display = "none"; exitShown = ""; exitArmedAt = 0;
+                document.body.classList.remove("armed-shown");
                 var cl = document.getElementById("exit-clean"); if (cl) cl.style.display = "none";
                 return;
             }
@@ -773,6 +775,7 @@
     </style>
     <style>
         #item-counter { position: fixed; top: min(2.4vw,18px); right: min(3vw,22px); display: none; z-index: 60; pointer-events: none; font: min(2.6vw,11px)/1 sans-serif; letter-spacing: 0.05em; color: rgba(243,156,15,0.75); text-shadow: 0 0 3px rgba(0,0,0,0.9); }
+        body.armed-shown #item-counter { display: none !important; }
         body.pause-shown #item-counter { right: calc(min(3vw,22px) + min(2.4vw,9px) * 2 + min(1.2vw,7px) + 12px); }
         #pause-indicator { position: fixed; top: min(2.4vw,18px); right: min(3vw,22px); display: none; gap: min(1.2vw,7px); z-index: 60; pointer-events: none;
                            animation: pause-breathe 3.2s ease-in-out infinite; will-change: transform, opacity; }
